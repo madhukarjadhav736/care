@@ -7,7 +7,7 @@ from care.facility.api.serializers.shifting import has_facility_permission
 from care.facility.models.facility import Facility
 from care.facility.models.file_upload import FileUpload
 from care.facility.models.notification import Notification
-from care.facility.models.patient import PatientRegistration
+from care.facility.models.patient import PatientNotes, PatientRegistration
 from care.facility.models.patient_consultation import (
     PatientConsent,
     PatientConsultation,
@@ -19,7 +19,7 @@ from care.utils.notification_handler import NotificationGenerator
 from care.utils.serializers.fields import ChoiceField
 
 
-def check_permissions(file_type, associating_id, user, action="create"):  # noqa: PLR0911, PLR0912
+def check_permissions(file_type, associating_id, user, action="create"):  # noqa: PLR0911, PLR0912, PLR0915
     try:
         if file_type == FileUpload.FileType.PATIENT.value:
             patient = PatientRegistration.objects.get(external_id=associating_id)
@@ -115,6 +115,15 @@ def check_permissions(file_type, associating_id, user, action="create"):  # noqa
                 msg = "No Permission"
                 raise Exception(msg)
             return sample.id
+        if file_type == FileUpload.FileType.PATIENT_NOTES.value:
+            patient_note = PatientNotes.objects.get(external_id=associating_id)
+            if not (
+                patient_note.created_by == user
+                or has_facility_permission(user, patient_note.facility)
+            ):
+                msg = "No Permission"
+                raise Exception(msg)
+            return associating_id
         if file_type in (
             FileUpload.FileType.CLAIM.value,
             FileUpload.FileType.COMMUNICATION.value,

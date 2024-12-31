@@ -65,6 +65,7 @@ class NotificationGenerator:
         extra_data=None,
         notification_mediums=False,
         worker_initated=False,
+        mentioned_users=None,
     ):
         if not worker_initated:
             if not isinstance(event_type, Notification.EventType):
@@ -96,6 +97,7 @@ class NotificationGenerator:
                 "defer_notifications": defer_notifications,
                 "generate_for_facility": generate_for_facility,
                 "extra_users": extra_users,
+                "mentioned_users": [user.id for user in (mentioned_users or [])],
                 "extra_data": self.serialize_extra_data(extra_data),
                 "notification_mediums": mediums,
                 "worker_initated": True,
@@ -109,6 +111,7 @@ class NotificationGenerator:
         caused_object = get_model_class(caused_object).objects.get(id=caused_object_pk)
         caused_by = User.objects.get(id=caused_by)
         facility = Facility.objects.get(id=facility)
+        mentioned_users = User.objects.filter(id__in=mentioned_users)
         self.notification_mediums = notification_mediums
         if not notification_mediums:
             self.notification_mediums = self._get_default_medium()
@@ -125,6 +128,7 @@ class NotificationGenerator:
         self.generate_for_facility = generate_for_facility
         self.defer_notifications = defer_notifications
         self.generate_extra_users()
+        self.mentioned_users = mentioned_users
 
     def serialize_extra_data(self, extra_data):
         if not extra_data:
@@ -189,6 +193,7 @@ class NotificationGenerator:
                 message = f"Prescription for Patient {self.caused_object.patient.name} was created by {self.caused_by.get_full_name()}"
             if self.event == Notification.Event.PATIENT_PRESCRIPTION_UPDATED.value:
                 message = f"Prescription for Patient {self.caused_object.patient.name} was updated by {self.caused_by.get_full_name()}"
+
         elif isinstance(self.caused_object, InvestigationSession):
             if self.event == Notification.Event.INVESTIGATION_SESSION_CREATED.value:
                 message = (
@@ -217,7 +222,8 @@ class NotificationGenerator:
         elif isinstance(self.caused_object, PatientNotes):
             if self.event == Notification.Event.PATIENT_NOTE_ADDED.value:
                 message = f"Notes for Patient {self.caused_object.patient.name} was added by {self.caused_by.get_full_name()}"
-
+            if self.event == Notification.Event.MENTIONED_IN_PATIENT_NOTE.value:
+                message = f"{self.caused_by.get_full_name()} mentioned you in a note for Patient {self.caused_object.patient.name}"
         return message
 
     def generate_sms_message(self):
@@ -300,29 +306,41 @@ class NotificationGenerator:
             self.caused_objects["facility"] = str(
                 self.caused_object.facility.external_id
             )
+            if self.caused_object.consultation:
+                self.caused_objects["consultation"] = str(
+                    self.caused_object.consultation.external_id
+                )
 
         return True
 
     def generate_system_users(self):
-        users = []
+        users = set()
         extra_users = self.extra_users
         caused_user = self.caused_by
-        facility_users = FacilityUser.objects.filter(facility_id=self.facility.id)
-        if self.event != Notification.Event.MESSAGE:
-            facility_users.exclude(
-                user__user_type__in=(
-                    User.TYPE_VALUE_MAP["Staff"],
-                    User.TYPE_VALUE_MAP["StaffReadOnly"],
+        mentioned_users = self.mentioned_users
+
+        if self.generate_for_facility:
+            facility_users = FacilityUser.objects.filter(facility_id=self.facility.id)
+            if self.event != Notification.Event.MESSAGE:
+                facility_users = facility_users.exclude(
+                    user__user_type__in=(
+                        User.TYPE_VALUE_MAP["Staff"],
+                        User.TYPE_VALUE_MAP["StaffReadOnly"],
+                    )
                 )
-            )
-        for facility_user in facility_users:
-            if facility_user.user.id != caused_user.id:
-                users.append(facility_user.user)
+            for facility_user in facility_users:
+                if facility_user.user.id != caused_user.id:
+                    users.add(facility_user.user)
+
         for user_id in extra_users:
             user_obj = User.objects.get(id=user_id)
             if user_obj.id != caused_user.id:
-                users.append(user_obj)
-        return users
+                users.add(user_obj)
+
+        if mentioned_users:
+            users.update(user for user in mentioned_users if user.id != caused_user.id)
+
+        return list(users)
 
     def generate_message_for_user(self, user, message, medium):
         notification = Notification()

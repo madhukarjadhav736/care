@@ -935,8 +935,15 @@ class PatientNotesViewSet(
     queryset = (
         PatientNotes.objects.all()
         .select_related(
-            "facility", "patient", "created_by", "reply_to", "reply_to__created_by"
+            "facility",
+            "patient",
+            "created_by",
+            "reply_to",
+            "reply_to__created_by",
+            "root_note",
+            "root_note__created_by",
         )
+        .prefetch_related("replies__created_by", "child_notes__created_by")
         .order_by("-created_date")
     )
     lookup_field = "external_id"
@@ -1016,6 +1023,14 @@ class PatientNotesViewSet(
             caused_object=instance,
             facility=patient.facility,
             generate_for_facility=True,
+        ).generate()
+
+        NotificationGenerator(
+            event=Notification.Event.MENTIONED_IN_PATIENT_NOTE,
+            caused_by=self.request.user,
+            caused_object=instance,
+            facility=patient.facility,
+            mentioned_users=instance.mentioned_users,
         ).generate()
 
         return instance

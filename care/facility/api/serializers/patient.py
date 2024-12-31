@@ -24,6 +24,7 @@ from care.facility.models import (
     PatientRegistration,
 )
 from care.facility.models.bed import ConsultationBed
+from care.facility.models.file_upload import FileUpload
 from care.facility.models.notification import Notification
 from care.facility.models.patient import PatientNotesEdit
 from care.facility.models.patient_base import (
@@ -454,9 +455,35 @@ class PatientNotesEditSerializer(serializers.ModelSerializer):
         exclude = ("patient_note",)
 
 
+def get_patient_note_files(obj, context):
+    from care.facility.api.serializers.file_upload import (
+        FileUploadListSerializer,
+        check_permissions,
+    )
+
+    file_type = FileUpload.FileType.PATIENT_NOTES
+    if check_permissions(file_type, obj.external_id, context["request"].user, "read"):
+        return FileUploadListSerializer(
+            FileUpload.objects.filter(
+                associating_id=obj.external_id,
+                file_type=file_type,
+                upload_completed=True,
+                is_archived=False,
+            ),
+            many=True,
+        ).data
+    return None
+
+
 class ReplyToPatientNoteSerializer(serializers.ModelSerializer):
     id = serializers.CharField(source="external_id", read_only=True)
     created_by_object = UserBaseMinimumSerializer(source="created_by", read_only=True)
+    reply_to = serializers.UUIDField(source="reply_to.external_id", read_only=True)
+    mentioned_users = UserBaseMinimumSerializer(many=True, read_only=True)
+    files = serializers.SerializerMethodField()
+
+    def get_files(self, obj):
+        return get_patient_note_files(obj, self.context)
 
     class Meta:
         model = PatientNotes
@@ -466,6 +493,9 @@ class ReplyToPatientNoteSerializer(serializers.ModelSerializer):
             "created_date",
             "user_type",
             "note",
+            "reply_to",
+            "mentioned_users",
+            "files",
         )
 
 
@@ -491,11 +521,51 @@ class PatientNotesSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     reply_to_object = ReplyToPatientNoteSerializer(source="reply_to", read_only=True)
+    files = serializers.SerializerMethodField()
+    replies = ReplyToPatientNoteSerializer(many=True, read_only=True)
+    child_notes = ReplyToPatientNoteSerializer(many=True, read_only=True)
+    root_note_object = ReplyToPatientNoteSerializer(source="root_note", read_only=True)
+    mentioned_users = UserBaseMinimumSerializer(many=True, read_only=True)
+
+    def get_files(self, obj):
+        return get_patient_note_files(obj, self.context)
 
     def validate_empty_values(self, data):
         if not data.get("note", "").strip():
             raise serializers.ValidationError({"note": ["Note cannot be empty"]})
         return super().validate_empty_values(data)
+
+    def validate(self, data):
+        validated_data = super().validate(data)
+
+        if reply_to := validated_data.get("reply_to"):
+            if (
+                validated_data.get("thread")
+                and reply_to.thread != validated_data["thread"]
+            ):
+                msg = "Reply to note should be in the same thread"
+                raise serializers.ValidationError(msg)
+
+            if (
+                validated_data.get("consultation")
+                and reply_to.consultation != validated_data["consultation"]
+            ):
+                msg = "Reply to note should be in the same consultation"
+                raise serializers.ValidationError(msg)
+
+            if self.instance and reply_to.id == self.instance.id:
+                msg = "A note cannot reply to itself"
+                raise serializers.ValidationError(msg)
+
+            # Check for circular references in ancestry chain
+            current_note = reply_to
+            while current_note:
+                if self.instance and current_note.id == self.instance.id:
+                    msg = "A note cannot be a reply to one of its own replies"
+                    raise serializers.ValidationError(msg)
+                current_note = current_note.root_note
+
+        return validated_data
 
     def create(self, validated_data):
         if "thread" not in validated_data:
@@ -516,14 +586,8 @@ class PatientNotesSerializer(serializers.ModelSerializer):
             # If the user is not a doctor then the user type is the same as the user type
             validated_data["user_type"] = user_type
 
-        if validated_data.get("reply_to"):
-            reply_to_note = validated_data["reply_to"]
-            if reply_to_note.thread != validated_data["thread"]:
-                msg = "Reply to note should be in the same thread"
-                raise serializers.ValidationError(msg)
-            if reply_to_note.consultation != validated_data.get("consultation"):
-                msg = "Reply to note should be in the same consultation"
-                raise serializers.ValidationError(msg)
+        if reply_to := validated_data.get("reply_to"):
+            validated_data["root_note"] = reply_to.root_note or reply_to
 
         user = self.context["request"].user
         note = validated_data.get("note")
@@ -575,6 +639,11 @@ class PatientNotesSerializer(serializers.ModelSerializer):
             "last_edited_date",
             "reply_to",
             "reply_to_object",
+            "files",
+            "replies",
+            "child_notes",
+            "root_note_object",
+            "mentioned_users",
         )
         read_only_fields = (
             "id",

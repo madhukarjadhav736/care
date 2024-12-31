@@ -138,6 +138,7 @@ class FileUpload(BaseFileUpload):
         COMMUNICATION = 6, "COMMUNICATION"
         CONSENT_RECORD = 7, "CONSENT_RECORD"
         ABDM_HEALTH_INFORMATION = 8, "ABDM_HEALTH_INFORMATION"
+        PATIENT_NOTES = 9, "PATIENT_NOTES"
 
     file_type = models.IntegerField(choices=FileType, default=FileType.PATIENT)
     is_archived = models.BooleanField(default=False)

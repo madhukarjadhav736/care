@@ -28,6 +28,11 @@ class ExpectedPatientNoteKeys(Enum):
     THREAD = "thread"
     USER_TYPE = "user_type"
     REPLY_TO_OBJECT = "reply_to_object"
+    REPLIES = "replies"
+    FILES = "files"
+    MENTIONED_USERS = "mentioned_users"
+    ROOT_NOTE_OBJECT = "root_note_object"
+    CHILD_NOTES = "child_notes"
 
 
 class ExpectedFacilityKeys(Enum):
@@ -326,6 +331,197 @@ class PatientNotesTestCase(TestUtils, APITestCase):
         self.assertEqual(len(data), 2)
         self.assertEqual(data[0]["note"], new_note_content)
         self.assertEqual(data[1]["note"], note_content)
+
+    def test_mentioned_users(self):
+        # test different username patterns
+        usernames = ["test_doctor", "test-nurse", "testadmin"]
+        for username in usernames:
+            self.create_user(username, self.district)
+
+        note_text = f"@{usernames[0]} please review, @{usernames[1]} to follow up and @{usernames[2]} to verify"
+
+        data = {
+            "facility": self.patient.facility,
+            "note": note_text,
+            "thread": PatientNoteThreadChoices.DOCTORS,
+        }
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            f"/api/v1/patient/{self.patient.external_id}/notes/", data=data
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Verify mentioned users in response
+        mentioned_users = response.data["mentioned_users"]
+        self.assertEqual(len(mentioned_users), 3)
+        mentioned_usernames = [user["username"] for user in mentioned_users]
+        for username in usernames:
+            self.assertIn(username, mentioned_usernames)
+
+    def test_note_files(self):
+        note_data = {
+            "facility": self.patient.facility,
+            "note": "Patient progress note with file attachments",
+            "thread": PatientNoteThreadChoices.DOCTORS,
+        }
+
+        self.client.force_authenticate(user=self.user)
+        note_response = self.client.post(
+            f"/api/v1/patient/{self.patient.external_id}/notes/", data=note_data
+        )
+
+        self.assertEqual(note_response.status_code, status.HTTP_201_CREATED)
+        note_id = note_response.data["id"]
+
+        # Test that files can be associated with notes and are included in responses
+        test_files = [
+            {
+                "name": f"Test File {i}",
+                "internal_name": f"test{i}.pdf",
+                "file_type": FileUpload.FileType.PATIENT_NOTES,
+                "associating_id": note_id,
+                "file_category": FileUpload.FileCategory.UNSPECIFIED,
+                "upload_completed": True,
+                "is_archived": False,
+            }
+            for i in range(1, 3)
+        ]
+
+        for file_data in test_files:
+            FileUpload.objects.create(**file_data)
+
+        response = self.client.get(
+            f"/api/v1/patient/{self.patient.external_id}/notes/{note_id}/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["files"]), len(test_files))
+        file_names = [f["name"] for f in response.data["files"]]
+        for file_data in test_files:
+            self.assertIn(file_data["name"], file_names)
+
+    def test_note_hierarchy(self):
+        self.client.force_authenticate(user=self.user)
+
+        root_note_data = {
+            "facility": self.patient.facility,
+            "note": "Initial assessment",
+            "thread": PatientNoteThreadChoices.DOCTORS,
+        }
+
+        root_response = self.client.post(
+            f"/api/v1/patient/{self.patient.external_id}/notes/", data=root_note_data
+        )
+
+        self.assertEqual(root_response.status_code, status.HTTP_201_CREATED)
+        root_note_id = root_response.data["id"]
+
+        # Create replies to the root note
+        reply_data = {
+            "facility": self.patient.facility,
+            "note": "Follow-up on assessment",
+            "thread": PatientNoteThreadChoices.DOCTORS,
+            "reply_to": root_note_id,
+        }
+
+        reply_response = self.client.post(
+            f"/api/v1/patient/{self.patient.external_id}/notes/", data=reply_data
+        )
+
+        self.assertEqual(reply_response.status_code, status.HTTP_201_CREATED)
+
+        # Verify the reply is properly linked
+        self.assertEqual(reply_response.data["reply_to_object"]["id"], root_note_id)
+
+        # Get the root note and verify it shows child notes
+        root_note_response = self.client.get(
+            f"/api/v1/patient/{self.patient.external_id}/notes/{root_note_id}/"
+        )
+
+        self.assertEqual(root_note_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(root_note_response.data["replies"]), 1)
+        self.assertEqual(
+            root_note_response.data["replies"][0]["note"], "Follow-up on assessment"
+        )
+
+        # Verify the reply has the correct root note
+        reply_id = reply_response.data["id"]
+        reply_get_response = self.client.get(
+            f"/api/v1/patient/{self.patient.external_id}/notes/{reply_id}/"
+        )
+
+        self.assertEqual(reply_get_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            reply_get_response.data["root_note_object"]["id"], root_note_id
+        )
+
+    def test_note_circular_references(self):
+        """
+        Test prevention of circular references in note hierarchy
+        """
+        self.client.force_authenticate(user=self.user)
+
+        root_note_data = {
+            "facility": self.patient.facility,
+            "note": "Initial assessment",
+            "thread": PatientNoteThreadChoices.DOCTORS,
+            "consultation": self.consultation.external_id,
+        }
+
+        root_response = self.client.post(
+            f"/api/v1/patient/{self.patient.external_id}/notes/", data=root_note_data
+        )
+        self.assertEqual(root_response.status_code, status.HTTP_201_CREATED)
+        root_note_id = root_response.data["id"]
+
+        # Try to create a reply to the root note
+        reply_data = {
+            "facility": self.patient.facility,
+            "note": "Follow-up on assessment",
+            "thread": PatientNoteThreadChoices.DOCTORS,
+            "consultation": self.consultation.external_id,
+            "reply_to": root_note_id,
+        }
+
+        reply_response = self.client.post(
+            f"/api/v1/patient/{self.patient.external_id}/notes/", data=reply_data
+        )
+        self.assertEqual(reply_response.status_code, status.HTTP_201_CREATED)
+
+        # Try to make root note reply to the reply (circular reference)
+        circular_data = {
+            "note": "Circular reply",
+            "thread": PatientNoteThreadChoices.DOCTORS,
+            "consultation": self.consultation.external_id,
+            "reply_to": reply_response.data["id"],
+        }
+
+        circular_response = self.client.put(
+            f"/api/v1/patient/{self.patient.external_id}/notes/{root_note_id}/",
+            data=circular_data,
+        )
+        self.assertEqual(circular_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            "A note cannot be a reply to one of its own replies",
+            str(circular_response.data),
+        )
+
+        # Try to make a note reply to itself
+        self_reply_data = {
+            "note": "Self reply",
+            "thread": PatientNoteThreadChoices.DOCTORS,
+            "consultation": self.consultation.external_id,
+            "reply_to": root_note_id,
+        }
+
+        self_reply_response = self.client.put(
+            f"/api/v1/patient/{self.patient.external_id}/notes/{root_note_id}/",
+            data=self_reply_data,
+        )
+        self.assertEqual(self_reply_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("A note cannot reply to itself", str(self_reply_response.data))
 
 
 class PatientTestCase(TestUtils, APITestCase):

@@ -1,8 +1,10 @@
 import enum
+import re
 from datetime import date
 
 from dateutil.relativedelta import relativedelta
 from django.contrib.postgres.aggregates import ArrayAgg
+from django.core.cache import cache
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Case, F, Func, JSONField, Value, When
@@ -806,12 +808,33 @@ class PatientNotes(FacilityBaseModel, ConsultationRelatedPermissionMixin):
         related_name="replies",
     )
     note = models.TextField(default="", blank=True)
+    root_note = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="child_notes",
+    )
 
     def get_related_consultation(self):
         # This is a temporary hack! this model does not have `assigned_to` field
         # and hence the permission mixin will fail if edit/object_read permissions are checked (although not used as of now)
         # Remove once patient notes is made consultation specific.
         return self
+
+    @property
+    def mentioned_users(self):
+        key = f"patient_note_mentions:{self.id}:{self.modified_date.timestamp()}"
+        hit = cache.get(key)
+
+        if not hit:
+            # handling both - and _ (valid usernames : devdoctor, dev-doctor and dev_doctor)
+            usernames = set(re.findall(r"@([a-zA-Z0-9][-_a-zA-Z0-9]{0,38})", self.note))
+            users = User.objects.filter(username__in=usernames)
+            cache.set(key, users, 60 * 60 * 24)  # 1 day
+            return users
+
+        return hit
 
 
 class PatientNotesEdit(models.Model):
