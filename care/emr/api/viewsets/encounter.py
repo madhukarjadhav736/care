@@ -46,6 +46,7 @@ class LiveFilter(filters.CharFilter):
 class EncounterFilters(filters.FilterSet):
     facility = filters.UUIDFilter(field_name="facility__external_id")
     status = filters.CharFilter(field_name="status", lookup_expr="iexact")
+    id = filters.UUIDFilter(field_name="external_id")
     encounter_class = filters.CharFilter(
         field_name="encounter_class", lookup_expr="iexact"
     )
