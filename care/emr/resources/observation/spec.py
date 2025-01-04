@@ -6,11 +6,16 @@ from pydantic import UUID4, BaseModel, Field
 from care.emr.fhir.schema.base import CodeableConcept
 from care.emr.models.observation import Observation
 from care.emr.resources.base import EMRResource
+from care.emr.resources.common import Coding
 from care.emr.resources.observation.valueset import (
     CARE_BODY_SITE_VALUESET,
     CARE_OBSERVATION_COLLECTION_METHOD,
 )
-from care.emr.resources.questionnaire.spec import SubjectType
+from care.emr.resources.questionnaire.spec import QuestionType, SubjectType
+from care.emr.resources.questionnaire_response.spec import (
+    QuestionnaireSubmitResultValue,
+)
+from care.emr.resources.user.spec import UserSpec
 
 
 class ObservationStatus(str, Enum):
@@ -21,12 +26,6 @@ class ObservationStatus(str, Enum):
 class PerformerType(str, Enum):
     related_person = "related_person"
     user = "user"
-
-
-class Coding(BaseModel):
-    system: str
-    code: str
-    text: str | None = None
 
 
 class Performer(BaseModel):
@@ -41,7 +40,7 @@ class ReferenceRange(BaseModel):
     text: str | None = None
 
 
-class ObservationSpec(EMRResource):
+class BaseObservationSpec(EMRResource):
     __model__ = Observation
 
     id: str = Field("", description="Unique ID in the system")
@@ -69,20 +68,17 @@ class ObservationSpec(EMRResource):
         description="Datetime when observation was recorded",
     )
 
-    data_entered_by_id: int
-
     performer: Performer | None = Field(
         None,
         description="Who performed the observation (currently supports RelatedPerson)",
     )  # If none the observation is captured by the data entering person
 
-    value: str | None = Field(
-        None,
-        description="Value of the observation if not code. For codes, contains display text",
+    value_type: QuestionType = Field(
+        description="Type of value",
     )
 
-    value_code: Coding | None = Field(
-        None, description="Value as code part of a system"
+    value: QuestionnaireSubmitResultValue = Field(
+        description="Value of the observation if not code. For codes, contains display text",
     )
 
     note: str | None = Field(None, description="Additional notes about the observation")
@@ -111,12 +107,27 @@ class ObservationSpec(EMRResource):
 
     questionnaire_response: UUID4 | None = None
 
+
+class ObservationSpec(BaseObservationSpec):
+    data_entered_by_id: int
+    created_by_id: int
+    updated_by_id: int
+
     def perform_extra_deserialization(self, is_update, obj):
         obj.external_id = self.id
         obj.data_entered_by_id = self.data_entered_by_id
+        obj.created_by_id = self.created_by_id
+        obj.updated_by_id = self.updated_by_id
+
         self.meta.pop("data_entered_by_id", None)
         if not is_update:
             obj.id = None
+
+
+class ObservationReadSpec(BaseObservationSpec):
+    created_by: UserSpec = dict
+    updated_by: UserSpec = dict
+    data_entered_by: UserSpec = dict
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
@@ -125,3 +136,10 @@ class ObservationSpec(EMRResource):
         mapping["encounter"] = None
         mapping["patient"] = None
         mapping["questionnaire_response"] = None
+
+        if obj.created_by:
+            mapping["created_by"] = UserSpec.serialize(obj.created_by)
+        if obj.updated_by:
+            mapping["updated_by"] = UserSpec.serialize(obj.updated_by)
+        if obj.data_entered_by:
+            mapping["data_entered_by"] = UserSpec.serialize(obj.data_entered_by)

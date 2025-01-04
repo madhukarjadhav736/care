@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-                migrations.RunPython(gen_uuid),
+                migrations.RunPython(gen_uuid , reverse_code=migrations.RunPython.noop),
         migrations.AlterField(
             model_name='questionnaire',
             name='slug',

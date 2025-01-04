@@ -30,3 +30,7 @@ class InternalQuestionnaireRegistry:
             for view in cls._questionnaires
             if term in view
         ]
+
+    @classmethod
+    def check_type_exists(cls, questionnaire_type):
+        return questionnaire_type in cls._questionnaires

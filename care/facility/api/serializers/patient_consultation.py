@@ -1,4 +1,3 @@
-from copy import copy
 from datetime import timedelta
 
 from django.conf import settings
@@ -18,13 +17,11 @@ from care.facility.api.serializers.consultation_diagnosis import (
     ConsultationCreateDiagnosisSerializer,
     ConsultationDiagnosisSerializer,
 )
-from care.facility.api.serializers.daily_round import DailyRoundSerializer
 from care.facility.api.serializers.encounter_symptom import (
     EncounterCreateSymptomSerializer,
     EncounterSymptomSerializer,
 )
 from care.facility.api.serializers.facility import FacilityBasicInfoSerializer
-from care.facility.events.handler import create_consultation_events
 from care.facility.models import (
     CATEGORY_CHOICES,
     COVID_CATEGORY_CHOICES,
@@ -83,7 +80,7 @@ class PatientConsultationSerializer(serializers.ModelSerializer):
     deprecated_covid_category = ChoiceField(
         choices=COVID_CATEGORY_CHOICES, required=False
     )
-    category = ChoiceField(choices=CATEGORY_CHOICES, required=True)
+    category = ChoiceField(choices=CATEGORY_CHOICES, required=False)
 
     referred_to_object = FacilityBasicInfoSerializer(
         source="referred_to", read_only=True
@@ -151,7 +148,6 @@ class PatientConsultationSerializer(serializers.ModelSerializer):
 
     last_edited_by = UserBaseMinimumSerializer(read_only=True)
     created_by = UserBaseMinimumSerializer(read_only=True)
-    last_daily_round = DailyRoundSerializer(read_only=True)
 
     current_bed = ConsultationBedSerializer(read_only=True)
 
@@ -219,7 +215,6 @@ class PatientConsultationSerializer(serializers.ModelSerializer):
         return bed_number
 
     def update(self, instance, validated_data):
-        old_instance = copy(instance)
         instance.last_edited_by = self.context["request"].user
 
         if instance.discharge_date:
@@ -268,14 +263,6 @@ class PatientConsultationSerializer(serializers.ModelSerializer):
         _temp = instance.assigned_to
 
         consultation = super().update(instance, validated_data)
-
-        create_consultation_events(
-            consultation.id,
-            consultation,
-            self.context["request"].user.id,
-            consultation.modified_date,
-            old=old_instance,
-        )
 
         if (
             "assigned_to" in validated_data
@@ -355,8 +342,8 @@ class PatientConsultationSerializer(serializers.ModelSerializer):
         else:
             raise ValidationError({"route_to_facility": "This field is required"})
 
-        create_diagnosis = validated_data.pop("create_diagnoses")
-        create_symptoms = validated_data.pop("create_symptoms")
+        create_diagnosis = validated_data.pop("create_diagnoses", [])
+        create_symptoms = validated_data.pop("create_symptoms", [])
 
         action = validated_data.pop("action", -1)
         review_interval = validated_data.get("review_interval", -1)
@@ -414,32 +401,34 @@ class PatientConsultationSerializer(serializers.ModelSerializer):
                 > consultation.encounter_date
             ):
                 consultation.is_readmission = True
-
-            diagnosis = ConsultationDiagnosis.objects.bulk_create(
-                [
-                    ConsultationDiagnosis(
+            if create_diagnosis:
+                ConsultationDiagnosis.objects.bulk_create(
+                    [
+                        ConsultationDiagnosis(
+                            consultation=consultation,
+                            diagnosis_id=obj["diagnosis"].id,
+                            is_principal=obj["is_principal"],
+                            verification_status=obj["verification_status"],
+                            created_by=user,
+                        )
+                        for obj in create_diagnosis
+                    ]
+                )
+            if create_symptoms:
+                EncounterSymptom.objects.bulk_create(
+                    EncounterSymptom(
                         consultation=consultation,
-                        diagnosis_id=obj["diagnosis"].id,
-                        is_principal=obj["is_principal"],
-                        verification_status=obj["verification_status"],
+                        symptom=obj.get("symptom"),
+                        onset_date=obj.get("onset_date"),
+                        cure_date=obj.get("cure_date"),
+                        clinical_impression_status=obj.get(
+                            "clinical_impression_status"
+                        ),
+                        other_symptom=obj.get("other_symptom") or "",
                         created_by=user,
                     )
-                    for obj in create_diagnosis
-                ]
-            )
-
-            symptoms = EncounterSymptom.objects.bulk_create(
-                EncounterSymptom(
-                    consultation=consultation,
-                    symptom=obj.get("symptom"),
-                    onset_date=obj.get("onset_date"),
-                    cure_date=obj.get("cure_date"),
-                    clinical_impression_status=obj.get("clinical_impression_status"),
-                    other_symptom=obj.get("other_symptom") or "",
-                    created_by=user,
+                    for obj in create_symptoms
                 )
-                for obj in create_symptoms
-            )
 
             if bed and consultation.suggestion == SuggestionChoices.A:
                 consultation_bed = ConsultationBed(
@@ -468,13 +457,6 @@ class PatientConsultationSerializer(serializers.ModelSerializer):
 
             consultation.save()
             patient.save()
-
-            create_consultation_events(
-                consultation.id,
-                (consultation, *diagnosis, *symptoms),
-                consultation.created_by.id,
-                consultation.created_date,
-            )
 
             NotificationGenerator(
                 event=Notification.Event.PATIENT_CONSULTATION_CREATED,
@@ -682,12 +664,6 @@ class PatientConsultationSerializer(serializers.ModelSerializer):
                     {"review_interval": ["This field value is must be greater than 0."]}
                 )
 
-        if not self.instance and "create_diagnoses" not in validated:
-            raise ValidationError({"create_diagnoses": ["This field is required."]})
-
-        if not self.instance and "create_symptoms" not in validated:
-            raise ValidationError({"create_symptoms": ["This field is required."]})
-
         return validated
 
 
@@ -793,7 +769,6 @@ class PatientConsultationDischargeSerializer(serializers.ModelSerializer):
         return attrs
 
     def update(self, instance: PatientConsultation, validated_data):
-        old_instance = copy(instance)
         with transaction.atomic():
             instance = super().update(instance, validated_data)
             patient: PatientRegistration = instance.patient
@@ -804,13 +779,6 @@ class PatientConsultationDischargeSerializer(serializers.ModelSerializer):
             ConsultationBed.objects.filter(
                 consultation=self.instance, end_date__isnull=True
             ).update(end_date=now())
-            create_consultation_events(
-                instance.id,
-                instance,
-                self.context["request"].user.id,
-                instance.modified_date,
-                old=old_instance,
-            )
 
             return instance
 

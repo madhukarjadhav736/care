@@ -3,20 +3,17 @@ from django.db import transaction
 from django.utils.timezone import now
 from rest_framework import serializers
 
+from care.emr.models.organization import Organization
 from care.facility.api.serializers import TIMESTAMP_FIELDS
 from care.facility.api.serializers.facility import (
     FacilityBasicInfoSerializer,
     FacilitySerializer,
-)
-from care.facility.api.serializers.patient_consultation import (
-    PatientConsultationSerializer,
 )
 from care.facility.models import (
     DISEASE_CHOICES,
     GENDER_CHOICES,
     Disease,
     Facility,
-    FacilityPatientStatsHistory,
     PatientContactDetails,
     PatientMetaInfo,
     PatientNotes,
@@ -78,8 +75,6 @@ class PatientListSerializer(serializers.ModelSerializer):
     district_object = DistrictSerializer(source="district", read_only=True)
     state_object = StateSerializer(source="state", read_only=True)
 
-    last_consultation = PatientConsultationSerializer(read_only=True)
-
     blood_group = ChoiceField(choices=BLOOD_GROUP_CHOICES, required=True)
     disease_status = ChoiceField(
         choices=DISEASE_STATUS_CHOICES, default=DiseaseStatusEnum.SUSPECTED.value
@@ -98,6 +93,7 @@ class PatientListSerializer(serializers.ModelSerializer):
             "countries_travelled_old",
             "allergies",
             "external_id",
+            "organization_cache",
         )
         read_only = (*TIMESTAMP_FIELDS, "death_datetime")
 
@@ -139,7 +135,6 @@ class PatientDetailSerializer(PatientListSerializer):
         child=MedicalHistorySerializer(), required=False
     )
 
-    last_consultation = PatientConsultationSerializer(read_only=True)
     facility_object = FacilitySerializer(source="facility", read_only=True)
 
     source = ChoiceField(
@@ -173,6 +168,11 @@ class PatientDetailSerializer(PatientListSerializer):
         queryset=User.objects.all(), required=False, allow_null=True
     )
 
+    geo_organization = ExternalIdSerializerField(
+        queryset=Organization.objects.filter(org_type="govt"),
+        required=False,
+    )
+
     allow_transfer = serializers.BooleanField(default=settings.PEACETIME_MODE)
 
     class Meta:
@@ -181,6 +181,7 @@ class PatientDetailSerializer(PatientListSerializer):
             "deleted",
             "countries_travelled_old",
             "external_id",
+            "organization_cache",
         )
         include = ("contacted_patients",)
         read_only = (
@@ -356,33 +357,6 @@ class PatientDetailSerializer(PatientListSerializer):
             ).generate()
 
             return patient
-
-
-class FacilityPatientStatsHistorySerializer(serializers.ModelSerializer):
-    id = serializers.CharField(source="external_id", read_only=True)
-    entry_date = serializers.DateField(default=lambda: now().date())
-    facility = ExternalIdSerializerField(
-        queryset=Facility.objects.all(), read_only=True
-    )
-
-    class Meta:
-        model = FacilityPatientStatsHistory
-        exclude = (
-            "deleted",
-            "external_id",
-        )
-        read_only_fields = (
-            "id",
-            "facility",
-        )
-
-    def create(self, validated_data):
-        instance, _ = FacilityPatientStatsHistory.objects.update_or_create(
-            facility=validated_data["facility"],
-            entry_date=validated_data["entry_date"],
-            defaults={**validated_data, "deleted": False},
-        )
-        return instance
 
 
 class PatientSearchSerializer(serializers.ModelSerializer):

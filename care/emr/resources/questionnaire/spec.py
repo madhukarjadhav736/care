@@ -5,9 +5,14 @@ from typing import Any
 from pydantic import UUID4, ConfigDict, Field, field_validator, model_validator
 
 from care.emr.fhir.schema.base import Coding
-from care.emr.models import Questionnaire
+from care.emr.models import Questionnaire, ValueSet
+from care.emr.registries.care_valueset.care_valueset import validate_valueset
 from care.emr.resources.base import EMRResource
-from care.emr.resources.observation.valueset import CARE_OBSERVATION_VALUSET
+from care.emr.resources.observation.valueset import (
+    CARE_OBSERVATION_VALUSET,
+    CARE_UCUM_UNITS,
+)
+from care.emr.resources.user.spec import UserSpec
 
 
 class EnableOperator(str, Enum):
@@ -42,11 +47,11 @@ class QuestionType(str, Enum):
     datetime = "dateTime"
     time = "time"
     choice = "choice"
-    # open_choice = "open_choice" # noqa ERA001
+    # open_choice = "open_choice"
     url = "url"
-    # attachment = "attachment" # noqa ERA001
-    # reference = "reference" # noqa ERA001
-    # quantity = "quantity" # noqa ERA001
+    # attachment = "attachment"
+    # reference = "reference"
+    quantity = "quantity"
     structured = "structured"
 
 
@@ -63,6 +68,7 @@ class QuestionnaireStatus(str, Enum):
 
 class SubjectType(str, Enum):
     patient = "patient"
+    encounter = "encounter"
 
 
 class QuestionnaireBaseSpec(EMRResource):
@@ -70,12 +76,8 @@ class QuestionnaireBaseSpec(EMRResource):
 
 
 class Performer(QuestionnaireBaseSpec):
-    performer_type: str = Field(
-        alias="performerType", description="Type of performer from FHIR specification"
-    )
-    performer_id: str | None = Field(
-        alias="performerId", description="ID of the reference"
-    )
+    performer_type: str = Field(description="Type of performer from FHIR specification")
+    performer_id: str | None = Field(description="ID of the reference")
     text: str | None = Field(
         description="Text description when no hard reference exists"
     )
@@ -90,7 +92,6 @@ class EnableWhen(QuestionnaireBaseSpec):
 class AnswerOption(QuestionnaireBaseSpec):
     value: Any = Field(description="Value based on question type")
     initial_selected: bool = Field(
-        alias="initialSelected",
         default=False,
         description="Whether option is initially selected",
     )
@@ -99,9 +100,7 @@ class AnswerOption(QuestionnaireBaseSpec):
 class Question(QuestionnaireBaseSpec):
     model_config = ConfigDict(populate_by_name=True)
 
-    link_id: str = Field(
-        alias="link_id", description="Unique human readable ID for linking"
-    )
+    link_id: str = Field(description="Unique human readable ID for linking")
     id: UUID4 = Field(
         description="Unique machine provided UUID", default_factory=uuid.uuid4
     )
@@ -111,7 +110,7 @@ class Question(QuestionnaireBaseSpec):
         json_schema_extra={"slug": CARE_OBSERVATION_VALUSET.slug},
     )
     collect_time: bool = Field(
-        alias="collectTime", default=False, description="Whether to collect timestamp"
+        default=False, description="Whether to collect timestamp"
     )
     collect_performer: bool = Field(
         default=False,
@@ -121,13 +120,11 @@ class Question(QuestionnaireBaseSpec):
     description: str | None = Field(None, description="Question description")
     type: QuestionType
     structured_type: str | None = None  # TODO : Add validation later
-    enable_when: list[EnableWhen] | None = Field(alias="enableWhen", default=None)
-    enable_behavior: EnableBehavior | None = Field(alias="enableBehavior", default=None)
-    disabled_display: DisabledDisplay | None = Field(
-        alias="disabledDisplay", default=None
-    )
-    collect_body_site: bool | None = Field(alias="collectBodySite", default=None)
-    collect_method: bool | None = Field(alias="collectMethod", default=None)
+    enable_when: list[EnableWhen] | None = None
+    enable_behavior: EnableBehavior | None = None
+    disabled_display: DisabledDisplay | None = None
+    collect_body_site: bool | None = None
+    collect_method: bool | None = None
     required: bool | None = None
     repeats: bool | None = None
     read_only: bool | None = None
@@ -135,12 +132,28 @@ class Question(QuestionnaireBaseSpec):
     answer_constraint: AnswerConstraint | None = Field(
         alias="answerConstraint", default=None
     )
-    answer_option: list[AnswerOption] | None = Field(alias="answerOption", default=None)
+    answer_option: list[AnswerOption] | None = None
     answer_value_set: str | None = None
     is_observation: bool | None = None
+    unit: Coding | None = Field(None, json_schema_extra={"slug": CARE_UCUM_UNITS.slug})
     questions: list["Question"] = []
     formula: str | None = None
     styling_metadata: dict = {}
+
+    @field_validator("unit")
+    @classmethod
+    def validate_unit(cls, code):
+        return validate_valueset(
+            "unit", cls.model_fields["unit"].json_schema_extra["slug"], code
+        )
+
+    @field_validator("answer_value_set")
+    @classmethod
+    def validate_value_set(cls, slug):
+        if not ValueSet.objects.filter(slug=slug).exists():
+            err = "Value set not found"
+            raise ValueError(err)
+        return slug
 
     def get_all_ids(self):
         ids = []
@@ -151,23 +164,25 @@ class Question(QuestionnaireBaseSpec):
         return ids
 
     @model_validator(mode="after")
+    def validate_value_set_or_options(self):
+        if self.type in [QuestionType.choice, QuestionType.quantity] and not (
+            self.answer_option or self.answer_value_set
+        ):
+            err = "Either answer options or a value set must be provided for choice type questions"
+            raise ValueError(err)
+        return self
+
+    @model_validator(mode="after")
     def validate_group_does_not_repeat(self):
         if self.type == QuestionType.group and self.repeats:
             err = "Group type questions cannot be repeated"
             raise ValueError(err)
         return self
 
-    @model_validator(mode="after")
-    def validate_options_not_empty(self):
-        if self.type == QuestionType.choice and not self.answer_option:
-            err = "Answer options are required for choice type questions"
-            raise ValueError(err)
-        return self
-
 
 class QuestionnaireSpec(QuestionnaireBaseSpec):
     version: str = Field("1.0", frozen=True, description="Version of the questionnaire")
-    slug: str | None = None
+    slug: str | None = Field(None, min_length=5, max_length=25, pattern=r"^[-\w]+$")
     title: str
     description: str = ""
     type: str = "custom"
@@ -177,6 +192,7 @@ class QuestionnaireSpec(QuestionnaireBaseSpec):
         {}, description="Styling requirements without validation"
     )
     questions: list[Question]
+    organizations: list[UUID4] = Field(min_length=1)
 
     @field_validator("slug")
     @classmethod
@@ -187,6 +203,13 @@ class QuestionnaireSpec(QuestionnaireBaseSpec):
             queryset = queryset.exclude(id=info.context["object"].id)
         if queryset.exists():
             err = "Slug must be unique"
+            raise ValueError(err)
+        from care.emr.registries.system_questionnaire.system_questionnaire import (
+            InternalQuestionnaireRegistry,
+        )
+
+        if InternalQuestionnaireRegistry.check_type_exists(slug):
+            err = "Slug cannot shadow internal question types"
             raise ValueError(err)
         return slug
 
@@ -212,6 +235,9 @@ class QuestionnaireSpec(QuestionnaireBaseSpec):
             raise ValueError(err)
         return self
 
+    def perform_extra_deserialization(self, is_update, obj):
+        obj._organizations = self.organizations  # noqa SLF001
+
 
 class QuestionnaireReadSpec(QuestionnaireBaseSpec):
     id: str
@@ -223,10 +249,17 @@ class QuestionnaireReadSpec(QuestionnaireBaseSpec):
     subject_type: SubjectType
     styling_metadata: dict
     questions: list
+    created_by: UserSpec = dict
+    updated_by: UserSpec = dict
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
+
+        if obj.created_by:
+            mapping["created_by"] = UserSpec.serialize(obj.created_by)
+        if obj.updated_by:
+            mapping["updated_by"] = UserSpec.serialize(obj.updated_by)
 
 
 # Add this to handle recursive Question type

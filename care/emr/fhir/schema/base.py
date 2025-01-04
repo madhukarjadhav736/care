@@ -1085,17 +1085,12 @@ class Quantity(BaseModel):
         None,
         description="Unique id for the element within a resource (for internal references). This may be any string value that does not contain spaces.",
     )
-    extension: list[Extension] | None = Field(
-        None,
-        description="May be used to represent additional information that is not part of the basic definition of the element. To make the use of extensions safe and managable, there is a strict set of governance applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension.",
-    )
+
     value: Decimal | None = Field(
         None,
         description="The value of the measured amount. The value includes an implicit precision in the presentation of the value.",
     )
-    field_value: Element | None = Field(
-        None, alias="_value", description="Extensions for value"
-    )
+
     comparator: Comparator | None = Field(
         None,
         description='How the value should be understood and represented - whether the actual value is greater or less than the stated value due to measurement issues; e.g. if the comparator is "<" , then the real value is < stated value.',
@@ -1104,22 +1099,14 @@ class Quantity(BaseModel):
         None, alias="_comparator", description="Extensions for comparator"
     )
     unit: String | None = Field(None, description="A human-readable form of the unit.")
-    field_unit: Element | None = Field(
-        None, alias="_unit", description="Extensions for unit"
-    )
+
     system: Uri | None = Field(
         None,
         description="The identification of the system that provides the coded form of the unit.",
     )
-    field_system: Element | None = Field(
-        None, alias="_system", description="Extensions for system"
-    )
     code: Code | None = Field(
         None,
         description="A computer processable form of the unit in some unit representation system.",
-    )
-    field_code: Element | None = Field(
-        None, alias="_code", description="Extensions for code"
     )
 
 

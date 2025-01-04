@@ -9,12 +9,8 @@ class AllergyIntolerance(EMRBaseModel):
     category = models.CharField(max_length=100, null=True, blank=True)
     criticality = models.CharField(max_length=100, null=True, blank=True)
     code = models.JSONField(default=dict, null=False, blank=False)
-    patient = models.ForeignKey(
-        "facility.PatientRegistration", on_delete=models.CASCADE
-    )
-    encounter = models.ForeignKey(
-        "facility.PatientConsultation", on_delete=models.CASCADE
-    )
+    patient = models.ForeignKey("emr.Patient", on_delete=models.CASCADE)
+    encounter = models.ForeignKey("emr.Encounter", on_delete=models.CASCADE)
     onset = models.JSONField(default=dict)
     recorded_date = models.DateTimeField(null=True, blank=True)
     last_occurrence = models.DateTimeField(null=True, blank=True)

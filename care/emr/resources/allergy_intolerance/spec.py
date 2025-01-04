@@ -5,10 +5,11 @@ from pydantic import UUID4, Field, field_validator
 
 from care.emr.fhir.schema.base import Coding
 from care.emr.models.allergy_intolerance import AllergyIntolerance
+from care.emr.models.encounter import Encounter
 from care.emr.registries.care_valueset.care_valueset import validate_valueset
 from care.emr.resources.allergy_intolerance.valueset import CARE_ALLERGY_CODE_VALUESET
 from care.emr.resources.base import EMRResource
-from care.facility.models import PatientConsultation
+from care.emr.resources.user.spec import UserSpec
 
 
 class ClinicalStatusChoices(str, Enum):
@@ -53,24 +54,25 @@ class BaseAllergyIntoleranceSpec(EMRResource):
     id: UUID4 = None
 
 
-class AllergyIntoleranceSpec(BaseAllergyIntoleranceSpec):
+class AllergyIntoleranceWriteSpec(BaseAllergyIntoleranceSpec):
     clinical_status: ClinicalStatusChoices
     verification_status: VerificationStatusChoices
     category: CategoryChoices
     criticality: CriticalityChoices
+
+    onset: AllergyIntoleranceOnSetSpec = {}
+
+    def perform_extra_deserialization(self, is_update, obj):
+        if not is_update:
+            obj.encounter = Encounter.objects.get(external_id=self.encounter)
+            obj.patient = obj.encounter.patient
+
+
+class AllergyIntoleranceSpec(AllergyIntoleranceWriteSpec):
+    encounter: UUID4
     code: Coding = Field(
         {}, json_schema_extra={"slug": CARE_ALLERGY_CODE_VALUESET.slug}
     )
-    encounter: UUID4
-    onset: AllergyIntoleranceOnSetSpec = {}
-
-    @field_validator("encounter")
-    @classmethod
-    def validate_encounter_exists(cls, encounter):
-        if not PatientConsultation.objects.filter(external_id=encounter).exists():
-            err = "Encounter not found"
-            raise ValueError(err)
-        return encounter
 
     @field_validator("code")
     @classmethod
@@ -79,10 +81,13 @@ class AllergyIntoleranceSpec(BaseAllergyIntoleranceSpec):
             "code", cls.model_fields["code"].json_schema_extra["slug"], code
         )
 
-    def perform_extra_deserialization(self, is_update, obj):
-        if not is_update:
-            obj.encounter = PatientConsultation.objects.get(external_id=self.encounter)
-            obj.patient = obj.encounter.patient
+    @field_validator("encounter")
+    @classmethod
+    def validate_encounter_exists(cls, encounter):
+        if not Encounter.objects.filter(external_id=encounter).exists():
+            err = "Encounter not found"
+            raise ValueError(err)
+        return encounter
 
 
 class AllergyIntrolanceSpecRead(BaseAllergyIntoleranceSpec):
@@ -98,7 +103,13 @@ class AllergyIntrolanceSpecRead(BaseAllergyIntoleranceSpec):
     code: Coding
     encounter: UUID4
     onset: AllergyIntoleranceOnSetSpec = dict
+    created_by: dict = {}
+    updated_by: dict = {}
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
+        if obj.created_by:
+            mapping["created_by"] = UserSpec.serialize(obj.created_by)
+        if obj.updated_by:
+            mapping["updated_by"] = UserSpec.serialize(obj.updated_by)

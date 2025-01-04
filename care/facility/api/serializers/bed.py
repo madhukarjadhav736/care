@@ -2,7 +2,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -74,7 +74,10 @@ class BedSerializer(ModelSerializer):
             if (not facilities.filter(id=location.facility.id).exists()) or (
                 not facilities.filter(id=facility.id).exists()
             ):
-                raise PermissionError
+                error_message = (
+                    "You do not have permission to access this facility's bed."
+                )
+                raise PermissionDenied(error_message)
             del attrs["location"]
             attrs["location"] = location
             attrs["facility"] = facility
@@ -110,7 +113,14 @@ class AssetBedSerializer(ModelSerializer):
             if (
                 not facilities.filter(id=asset.current_location.facility.id).exists()
             ) or (not facilities.filter(id=bed.facility.id).exists()):
-                raise PermissionError
+                error_message = (
+                    "You do not have permission to access this facility's assetbed."
+                )
+                raise PermissionDenied(error_message)
+            if AssetBed.objects.filter(asset=asset, bed=bed).exists():
+                raise ValidationError(
+                    {"non_field_errors": "Asset is already linked to bed"}
+                )
             if asset.asset_class not in [
                 AssetClasses.HL7MONITOR.name,
                 AssetClasses.ONVIF.name,
@@ -123,18 +133,15 @@ class AssetBedSerializer(ModelSerializer):
                     {"asset": "Should be in the same facility as the bed"}
                 )
             if (
-                asset.asset_class
-                in [
-                    AssetClasses.HL7MONITOR.name,
-                    AssetClasses.ONVIF.name,
-                ]
+                asset.asset_class == AssetClasses.HL7MONITOR.name
+                and AssetBed.objects.filter(
+                    bed=bed, asset__asset_class=asset.asset_class
+                ).exists()
             ) and AssetBed.objects.filter(
                 bed=bed, asset__asset_class=asset.asset_class
             ).exists():
                 raise ValidationError(
-                    {
-                        "asset": "Bed is already in use by another asset of the same class"
-                    }
+                    {"asset": "Another HL7 Monitor is already linked to this bed."}
                 )
         else:
             raise ValidationError(

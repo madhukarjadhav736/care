@@ -10,26 +10,28 @@ from django.test import TestCase
 from PIL import Image
 from rest_framework.test import APIClient
 
+from care.emr.reports import discharge_summary
+from care.emr.reports.discharge_summary import compile_typ
 from care.facility.models import (
-    ConditionVerificationStatus,
-    ICD11Diagnosis,
     PrescriptionDosageType,
     PrescriptionType,
 )
-from care.facility.utils.reports import discharge_summary
-from care.facility.utils.reports.discharge_summary import compile_typ
 from care.utils.tests.test_utils import TestUtils
 
 
 def compare_images(image1_path: Path, image2_path: Path) -> bool:
     with Image.open(image1_path) as img1, Image.open(image2_path) as img2:
         if img1.mode != img2.mode or img1.size != img2.size:
-            return False
+            msg = f"Images differ in size or mode {image1_path} {image2_path}"
+            raise ValueError(msg)
 
         img1_hash = hashlib.sha256(img1.tobytes()).hexdigest()
         img2_hash = hashlib.sha256(img2.tobytes()).hexdigest()
 
-    return img1_hash == img2_hash
+    if img1_hash == img2_hash:
+        return True
+    msg = f"Images differ in content {image1_path} {image2_path}"
+    raise ValueError(msg)
 
 
 def test_compile_typ(data) -> bool:
@@ -155,34 +157,6 @@ class TestGenerateDischargeSummaryPDF(TestCase, TestUtils):
             cls.user,
             prescription_type=PrescriptionType.DISCHARGE,
             dosage_type=PrescriptionDosageType.PRN,
-        )
-        cls.create_consultation_diagnosis(
-            cls.consultation,
-            ICD11Diagnosis.objects.filter(
-                label="SG31 Conception vessel pattern (TM1)"
-            ).first(),
-            verification_status=ConditionVerificationStatus.CONFIRMED,
-        )
-        cls.create_consultation_diagnosis(
-            cls.consultation,
-            ICD11Diagnosis.objects.filter(
-                label="SG2B Liver meridian pattern (TM1)"
-            ).first(),
-            verification_status=ConditionVerificationStatus.DIFFERENTIAL,
-        )
-        cls.create_consultation_diagnosis(
-            cls.consultation,
-            ICD11Diagnosis.objects.filter(
-                label="SG29 Triple energizer meridian pattern (TM1)"
-            ).first(),
-            verification_status=ConditionVerificationStatus.PROVISIONAL,
-        )
-        cls.create_consultation_diagnosis(
-            cls.consultation,
-            ICD11Diagnosis.objects.filter(
-                label="SG60 Early yang stage pattern (TM1)"
-            ).first(),
-            verification_status=ConditionVerificationStatus.UNCONFIRMED,
         )
 
     def setUp(self) -> None:

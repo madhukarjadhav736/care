@@ -11,6 +11,7 @@ class Request(BaseModel):
     url: str
     method: str
     body: dict = {}
+    reference_id: str
 
 
 class BatchRequest(BaseModel):
@@ -28,6 +29,7 @@ class BatchRequestView(GenericViewSet):
     def create(self, request, *args, **kwargs):
         requests = BatchRequest(**request.data)
         errored = False
+        loop = 0
         try:
             with transaction.atomic():
                 responses = execute_batch_requests(request, requests)
@@ -37,10 +39,12 @@ class BatchRequestView(GenericViewSet):
                         errored = True
                     structured_responses.append(
                         {
+                            "reference_id": requests.requests[loop].reference_id,
                             "data": response["data"],
                             "status_code": response["status_code"],
                         }
                     )
+                    loop += 1
                 if errored:
                     raise HandledError
         except HandledError:

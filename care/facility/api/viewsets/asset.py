@@ -58,8 +58,10 @@ from care.facility.models.asset import (
     AvailabilityRecord,
     StatusChoices,
 )
+from care.facility.models.bed import AssetBed, ConsultationBed
 from care.users.models import User
 from care.utils.assetintegration.asset_classes import AssetClasses
+from care.utils.assetintegration.base import BaseAssetIntegration
 from care.utils.cache.cache_allowed_facilities import get_accessible_facilities
 from care.utils.filters.choicefilter import CareChoiceFilter, inverse_choices
 from care.utils.queryset.asset_bed import get_asset_queryset
@@ -84,6 +86,27 @@ def delete_asset_cache(sender, instance, created, **kwargs):
     cache.delete("asset:qr:" + str(instance.id))
 
 
+class AssetLocationFilter(filters.FilterSet):
+    bed_is_occupied = filters.BooleanFilter(method="filter_bed_is_occupied")
+
+    def filter_bed_is_occupied(self, queryset, name, value):
+        asset_locations = (
+            AssetBed.objects.select_related("asset", "bed")
+            .filter(asset__asset_class=AssetClasses.HL7MONITOR.name)
+            .values_list("bed__location_id", "bed__id")
+        )
+        if value:
+            asset_locations = asset_locations.filter(
+                bed__id__in=Subquery(
+                    ConsultationBed.objects.filter(
+                        bed__id=OuterRef("bed__id"), end_date__isnull=value
+                    ).values("bed__id")
+                )
+            )
+        asset_locations = asset_locations.values_list("bed__location_id", flat=True)
+        return queryset.filter(id__in=asset_locations)
+
+
 class AssetLocationViewSet(
     ListModelMixin,
     RetrieveModelMixin,
@@ -101,8 +124,9 @@ class AssetLocationViewSet(
     )
     serializer_class = AssetLocationSerializer
     lookup_field = "external_id"
-    filter_backends = (drf_filters.SearchFilter,)
+    filter_backends = (filters.DjangoFilterBackend, drf_filters.SearchFilter)
     search_fields = ["name"]
+    filterset_class = AssetLocationFilter
 
     def get_serializer_context(self):
         facility = self.get_facility()
@@ -366,7 +390,6 @@ class AssetViewSet(
         This API is used to operate assets. API accepts the asset_id and action as parameters.
         """
         try:
-            action = request.data["action"]
             asset: Asset = self.get_object()
             middleware_hostname = (
                 asset.meta.get(
@@ -378,11 +401,11 @@ class AssetViewSet(
             asset_class: BaseAssetIntegration = AssetClasses[asset.asset_class].value(
                 {
                     **asset.meta,
-                    "id": asset.external_id,
+                    "id": str(asset.external_id),
                     "middleware_hostname": middleware_hostname,
                 }
             )
-            result = asset_class.handle_action(action)
+            result = asset_class.handle_action(**request.data["action"])
             return Response({"result": result}, status=status.HTTP_200_OK)
 
         except ValidationError as e:

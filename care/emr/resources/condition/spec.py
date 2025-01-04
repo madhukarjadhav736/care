@@ -5,10 +5,11 @@ from pydantic import UUID4, Field, field_validator
 
 from care.emr.fhir.schema.base import Coding
 from care.emr.models.condition import Condition
+from care.emr.models.encounter import Encounter
 from care.emr.registries.care_valueset.care_valueset import validate_valueset
 from care.emr.resources.base import EMRResource
 from care.emr.resources.condition.valueset import CARE_CODITION_CODE_VALUESET
-from care.facility.models import PatientConsultation
+from care.emr.resources.user.spec import UserSpec
 
 
 class ClinicalStatusChoices(str, Enum):
@@ -42,23 +43,22 @@ class SeverityChoices(str, Enum):
 
 
 class ConditionOnSetSpec(EMRResource):
-    onset_datetime: datetime.datetime = None
-    onset_age: int = None
-    onset_string: str = None
-    note: str
+    onset_datetime: datetime.datetime | None = None
+    onset_age: int | None = None
+    onset_string: str | None = None
+    note: str | None = None
 
 
-class BaseAllergyIntoleranceSpec(EMRResource):
+class BaseConditionSpec(EMRResource):
     __model__ = Condition
     __exclude__ = ["patient", "encounter"]
     id: UUID4 = None
 
 
-class ConditionSpec(BaseAllergyIntoleranceSpec):
-    clinical_status: ClinicalStatusChoices
+class ConditionSpec(BaseConditionSpec):
+    clinical_status: ClinicalStatusChoices | None = None
     verification_status: VerificationStatusChoices
-    category: CategoryChoices
-    severity: SeverityChoices
+    severity: SeverityChoices | None = None
     code: Coding = Field(json_schema_extra={"slug": CARE_CODITION_CODE_VALUESET.slug})
     encounter: UUID4
     onset: ConditionOnSetSpec = {}
@@ -73,33 +73,43 @@ class ConditionSpec(BaseAllergyIntoleranceSpec):
     @field_validator("encounter")
     @classmethod
     def validate_encounter_exists(cls, encounter):
-        if not PatientConsultation.objects.filter(external_id=encounter).exists():
+        if not Encounter.objects.filter(external_id=encounter).exists():
             err = "Encounter not found"
             raise ValueError(err)
         return encounter
 
     def perform_extra_deserialization(self, is_update, obj):
         if not is_update:
-            obj.encounter = PatientConsultation.objects.get(
+            obj.encounter = Encounter.objects.get(
                 external_id=self.encounter
             )  # Needs more validation
             obj.patient = obj.encounter.patient
 
 
-class ConditionSpecRead(BaseAllergyIntoleranceSpec):
+class ConditionSpecRead(BaseConditionSpec):
     """
     Validation for deeper models may not be required on read, Just an extra optimisation
     """
 
     # Maybe we can use model_construct() to be better at reads, need profiling to be absolutely sure
+
     clinical_status: str
     verification_status: str
     category: str
     criticality: str
+    severity: str
     code: Coding
     encounter: UUID4
     onset: ConditionOnSetSpec = dict
+    created_by: UserSpec = dict
+    updated_by: UserSpec = dict
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
+        mapping["encounter"] = obj.encounter.external_id
+
+        if obj.created_by:
+            mapping["created_by"] = UserSpec.serialize(obj.created_by)
+        if obj.updated_by:
+            mapping["updated_by"] = UserSpec.serialize(obj.updated_by)

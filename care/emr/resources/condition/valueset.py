@@ -3,7 +3,7 @@ from care.emr.registries.care_valueset.care_valueset import CareValueset
 from care.emr.resources.valueset.spec import ValueSetStatusOptions
 
 CARE_CODITION_CODE_VALUESET = CareValueset(
-    "Disease", "system-codition-code", ValueSetStatusOptions.active.value
+    "Disease", "system-condition-code", ValueSetStatusOptions.active.value
 )
 
 CARE_CODITION_CODE_VALUESET.register_valueset(

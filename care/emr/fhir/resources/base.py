@@ -3,12 +3,13 @@ from copy import deepcopy
 
 import json_fingerprint
 import simplejson as json
+from django.conf import settings
 from django.core.cache import cache
 from json_fingerprint import hash_functions
 
 from care.emr.fhir.client import FHIRClient
 
-default_fhir_client = FHIRClient(server_url="http://165.22.211.144/fhir")
+default_fhir_client = FHIRClient(server_url=settings.SNOWSTORM_DEPLOYMENT_URL)
 
 
 class ResourceManger:

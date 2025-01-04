@@ -251,7 +251,12 @@ class User(AbstractUser):
 
     REVERSE_TYPE_MAP = reverse_choices(TYPE_CHOICES)
 
-    user_type = models.IntegerField(choices=TYPE_CHOICES, blank=False)
+    REVERSE_MAPPING = {value: name for name, value in TYPE_VALUE_MAP.items()}
+
+    old_user_type = models.IntegerField(
+        choices=TYPE_CHOICES, blank=True, null=True, default=None
+    )
+    user_type = models.CharField(max_length=100)
     created_by = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
@@ -269,6 +274,10 @@ class User(AbstractUser):
     )
     state = models.ForeignKey(State, on_delete=models.PROTECT, null=True, blank=True)
 
+    geo_organization = models.ForeignKey(
+        "emr.Organization", on_delete=models.SET_NULL, null=True, blank=True
+    )
+
     phone_number = models.CharField(
         max_length=14, validators=[mobile_or_landline_number_validator]
     )
@@ -281,7 +290,10 @@ class User(AbstractUser):
     )
     video_connect_link = models.URLField(blank=True, null=True)
 
-    gender = models.IntegerField(choices=GENDER_CHOICES, blank=False)
+    old_gender = models.IntegerField(
+        choices=GENDER_CHOICES, blank=True, null=True, default=None
+    )
+    gender = models.CharField(max_length=100)
     date_of_birth = models.DateField(null=True, blank=True)
     profile_picture_url = models.CharField(
         blank=True, null=True, default=None, max_length=500
@@ -352,6 +364,8 @@ class User(AbstractUser):
 
     def read_profile_picture_url(self):
         if self.profile_picture_url:
+            if settings.FACILITY_CDN:
+                return f"{settings.FACILITY_CDN}/{self.profile_picture_url}"
             return f"{settings.FACILITY_S3_BUCKET_EXTERNAL_ENDPOINT}/{settings.FACILITY_S3_BUCKET}/{self.profile_picture_url}"
         return None
 
@@ -364,7 +378,7 @@ class User(AbstractUser):
         return True
 
     def has_object_read_permission(self, request):
-        return request.user.is_superuser or self == request.user
+        return True
 
     @staticmethod
     def has_write_permission(request):
@@ -441,6 +455,14 @@ class UserFacilityAllocation(models.Model):
 
     def __str__(self):
         return self.facility.name
+
+
+class PlugConfig(models.Model):
+    slug = models.CharField(max_length=255, unique=True)
+    meta = models.JSONField(default=dict)
+
+    def __str__(self):
+        return self.slug
 
 
 class UserFlag(BaseFlag):

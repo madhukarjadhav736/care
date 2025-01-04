@@ -12,7 +12,6 @@ from care.emr.fhir.schema.base import Coding
 class EMRResource(BaseModel):
     __model__ = None
     __exclude__ = []
-
     meta: dict = {}
     __questionnaire_cache__ = {}
 
@@ -36,11 +35,15 @@ class EMRResource(BaseModel):
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
 
+    @classmethod
+    def perform_extra_user_serialization(cls, mapping, obj, user):
+        pass
+
     def is_update(self):
         return getattr("_is_update", False)
 
     @classmethod
-    def serialize(cls, obj: __model__):
+    def serialize(cls, obj: __model__, user=None):
         """
         Creates a pydantic object from a database object
         """
@@ -49,10 +52,12 @@ class EMRResource(BaseModel):
         for mapping in mappings:
             if mapping in cls.model_fields and mapping not in cls.__exclude__:
                 constructed[mapping] = getattr(obj, mapping)
-        for field in obj.meta:
+        for field in getattr(obj, "meta", {}):
             if field in cls.model_fields:
                 constructed[field] = obj.meta[field]
         cls.perform_extra_serialization(constructed, obj)
+        if user:
+            cls.perform_extra_user_serialization(constructed, obj, user=user)
         return cls.model_construct(**constructed)
 
     def perform_extra_deserialization(self, is_update, obj):
@@ -70,7 +75,11 @@ class EMRResource(BaseModel):
         meta = {}
         dump = self.model_dump(mode="json", exclude_defaults=True)
         for field in dump:
-            if field in database_fields and field not in self.__exclude__:
+            if (
+                field in database_fields
+                and field not in self.__exclude__
+                and field not in ["id", "external_id"]
+            ):
                 obj.__setattr__(field, dump[field])
             elif field not in self.__exclude__:
                 meta[field] = dump[field]
@@ -79,7 +88,7 @@ class EMRResource(BaseModel):
         return obj
 
     @classmethod
-    def questionnaire(cls, parent_classes=None):  # noqa PLR0912
+    def as_questionnaire(cls, parent_classes=None):  # noqa PLR0912
         """
         This is created so that the FE has an idea about bound valuesets and other metadata about the form
         Maybe we can speed up this process by starting with model's JSON Schema
@@ -124,7 +133,10 @@ class EMRResource(BaseModel):
                 field_obj["type"] = "group"
                 parent_classes = parent_classes[::]
                 parent_classes.append(cls)
-                field_obj["questions"] = field_type.questionnaire(parent_classes)
+                field_obj["questions"] = field_type.as_questionnaire(parent_classes)
             questionnire_obj.append(field_obj)
         cls.__questionnaire_cache__ = questionnire_obj
         return questionnire_obj
+
+    def to_json(self):
+        return self.model_dump(mode="json", exclude=["meta"])

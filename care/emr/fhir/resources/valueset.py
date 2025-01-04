@@ -52,7 +52,7 @@ class ValueSetResource(ResourceManger):
     def search(self):
         parameters = []
         for key in self._filters:
-            if key == "search":
+            if key == "search" and self._filters[key]:
                 parameters.append({"name": "filter", "valueString": self._filters[key]})
             if key == "count":
                 parameters.append({"name": "count", "valueInteger": self._filters[key]})

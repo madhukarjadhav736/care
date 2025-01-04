@@ -1,11 +1,12 @@
 from enum import Enum
 
 from django.core.validators import slug_re
-from pydantic import UUID4, field_validator, model_validator
+from pydantic import UUID4, Field, field_validator, model_validator
 
 from care.emr.fhir.schema.valueset.valueset import ValueSetCompose
 from care.emr.models.valueset import ValueSet as ValuesetDatabaseModel
 from care.emr.resources.base import EMRResource
+from care.emr.resources.user.spec import UserSpec
 
 
 class ValueSetStatusOptions(str, Enum):
@@ -15,22 +16,31 @@ class ValueSetStatusOptions(str, Enum):
     unknown = "unknown"
 
 
-class ValueSetSpec(EMRResource):
+class ValueSetBaseSpec(EMRResource):
     __model__ = ValuesetDatabaseModel
 
     id: UUID4 = None
-    slug: str
+    slug: str | None = Field(None, min_length=5, max_length=25, pattern=r"^[-\w]+$")
     name: str
     description: str
     compose: ValueSetCompose
     status: ValueSetStatusOptions
     is_system_defined: bool = False
 
+
+class ValueSetSpec(ValueSetBaseSpec):
     @field_validator("slug")
     @classmethod
-    def validate_slug(cls, slug: str) -> str:
+    def validate_slug(cls, slug: str, info) -> str:
         if not slug_re.match(slug):
             err = "Slug must be alphanumeric and can contain hyphens, underscores, and periods."
+            raise ValueError(err)
+        queryset = ValuesetDatabaseModel.objects.filter(slug=slug)
+        context = cls.get_serializer_context(info)
+        if context.get("is_update", False):
+            queryset = queryset.exclude(id=info.context["object"].id)
+        if queryset.exists():
+            err = "Slug must be unique"
             raise ValueError(err)
         return slug
 
@@ -43,6 +53,19 @@ class ValueSetSpec(EMRResource):
 
     def perform_extra_deserialization(self, is_update, obj):
         obj.compose = self.compose.model_dump(exclude_defaults=True, exclude_none=True)
+
+
+class ValueSetReadSpec(ValueSetBaseSpec):
+    created_by: UserSpec = dict
+    updated_by: UserSpec = dict
+
+    @classmethod
+    def perform_extra_serialization(cls, mapping, obj):
+        mapping["id"] = obj.external_id
+        if obj.created_by:
+            mapping["created_by"] = UserSpec.serialize(obj.created_by)
+        if obj.updated_by:
+            mapping["updated_by"] = UserSpec.serialize(obj.created_by)
 
 
 ValueSetSpec.model_rebuild()

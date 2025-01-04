@@ -123,7 +123,13 @@ THIRD_PARTY_APPS = [
     "django_rest_passwordreset",
     "healthy_django",
 ]
-LOCAL_APPS = ["care.facility", "care.users", "care.audit_log", "care.emr"]
+LOCAL_APPS = [
+    "care.security",
+    "care.facility",
+    "care.users",
+    "care.audit_log",
+    "care.emr",
+]
 
 PLUGIN_APPS = manager.get_apps()
 
@@ -273,7 +279,7 @@ X_FRAME_OPTIONS = "DENY"
 CSRF_TRUSTED_ORIGINS = env.json("CSRF_TRUSTED_ORIGINS", default=[])
 
 # https://github.com/adamchainz/django-cors-headers#cors_allowed_origin_regexes-sequencestr--patternstr
-# CORS_URLS_REGEX = r"^/api/.*$"  # noqa: ERA001
+# CORS_URLS_REGEX = r"^/api/.*$"
 
 # EMAIL
 # ------------------------------------------------------------------------------
@@ -299,11 +305,11 @@ EMAIL_SUBJECT_PREFIX = env("DJANGO_EMAIL_SUBJECT_PREFIX", default="[Care]")
 # ADMIN
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#server-email
-# SERVER_EMAIL = env("DJANGO_SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)  # noqa F405
+# SERVER_EMAIL = env("DJANGO_SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
 # https://docs.djangoproject.com/en/dev/ref/settings/#admins
-# ADMINS = [("""👪""", "admin@ohc.network")]  # noqa: ERA001
+# ADMINS = [("""👪""", "admin@ohc.network")]
 # https://docs.djangoproject.com/en/dev/ref/settings/#managers
-# MANAGERS = ADMINS  # noqa: ERA001
+# MANAGERS = ADMINS
 
 # Django Admin URL.
 ADMIN_URL = env("DJANGO_ADMIN_URL", default="admin")
@@ -362,6 +368,7 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
+        "care.security.utils.permission_class.CareAuthentication",
     ],
     "DEFAULT_PAGINATION_CLASS": "care.utils.pagination.care_pagination.CareLimitOffsetPagination",
     "PAGE_SIZE": 14,
@@ -400,7 +407,7 @@ if USE_TZ:
     # https://docs.celeryq.dev/en/latest/userguide/configuration.html#std:setting-timezone
     CELERY_TIMEZONE = TIME_ZONE
 # https://docs.celeryq.dev/en/latest/userguide/configuration.html#std:setting-broker_url
-CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
 # https://docs.celeryq.dev/en/latest/userguide/configuration.html#std:setting-result_backend
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 # https://docs.celeryq.dev/en/latest/userguide/configuration.html#std:setting-accept_content
@@ -525,6 +532,7 @@ VAPID_PRIVATE_KEY = env(
     "VAPID_PRIVATE_KEY", default="7mf3OFreFsgFF4jd8A71ZGdVaj8kpJdOto4cFbfAS-s"
 )
 SEND_SMS_NOTIFICATION = False
+NOTIFICATION_RETENTION_DAYS = env.int("NOTIFICATION_RETENTION_DAYS", default=30)
 
 # Cloud and Buckets
 # ------------------------------------------------------------------------------
@@ -608,7 +616,7 @@ FACILITY_S3_BUCKET_EXTERNAL_ENDPOINT = env(
         BUCKET_EXTERNAL_ENDPOINT if BUCKET_ENDPOINT else FACILITY_S3_BUCKET_ENDPOINT
     ),
 )
-
+FACILITY_CDN = env("FACILITY_CDN", default=None)
 # for setting the shifting mode
 PEACETIME_MODE = env.bool("PEACETIME_MODE", default=True)
 
@@ -634,16 +642,9 @@ PLAUSIBLE_HOST = env("PLAUSIBLE_HOST", default="")
 PLAUSIBLE_SITE_ID = env("PLAUSIBLE_SITE_ID", default="")
 PLAUSIBLE_AUTH_TOKEN = env("PLAUSIBLE_AUTH_TOKEN", default="")
 
-# Disable summarization tasks
-TASK_SUMMARIZE_TRIAGE = env.bool("TASK_SUMMARIZE_TRIAGE", default=True)
-TASK_SUMMARIZE_TESTS = env.bool("TASK_SUMMARIZE_TESTS", default=True)
-TASK_SUMMARIZE_FACILITY_CAPACITY = env.bool(
-    "TASK_SUMMARIZE_FACILITY_CAPACITY", default=True
-)
-TASK_SUMMARIZE_PATIENT = env.bool("TASK_SUMMARIZE_PATIENT", default=True)
-TASK_SUMMARIZE_DISTRICT_PATIENT = env.bool(
-    "TASK_SUMMARIZE_DISTRICT_PATIENT", default=True
-)
-
 # Timeout for middleware request (in seconds)
 MIDDLEWARE_REQUEST_TIMEOUT = env.int("MIDDLEWARE_REQUEST_TIMEOUT", 20)
+
+SNOWSTORM_DEPLOYMENT_URL = env(
+    "SNOWSTORM_DEPLOYMENT_URL", default="http://165.22.211.144/fhir"
+)

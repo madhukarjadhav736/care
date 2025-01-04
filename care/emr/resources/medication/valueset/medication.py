@@ -11,7 +11,13 @@ CARE_MEDICATION_VALUESET.register_valueset(
         include=[
             ValueSetInclude(
                 system="http://snomed.info/sct",
-                filter=[{"property": "concept", "op": "is-a", "value": "763158003"}],
+                filter=[
+                    {
+                        "property": "constraint",
+                        "op": "=",
+                        "value": "<< 763158003 |Medicinal product|",
+                    }
+                ],
             ),
         ]
     )

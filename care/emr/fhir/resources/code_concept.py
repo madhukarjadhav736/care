@@ -9,15 +9,7 @@ class CodeConceptResource(ResourceManger):
     resource = "CodeConcept"
 
     def serialize_lookup(self, result):
-        structured_output = parse_fhir_parameter_output(result)
-        return CodeConcept(
-            name=structured_output["name"],
-            display=structured_output["display"],
-            code=self._filters["code"],
-            system=structured_output["system"],
-            property=structured_output.get("property", {}),
-            designation=structured_output.get("designation", {}) or {},
-        )
+        return parse_fhir_parameter_output(result)
 
     def get(self):
         if "system" not in self._filters or "code" not in self._filters:
