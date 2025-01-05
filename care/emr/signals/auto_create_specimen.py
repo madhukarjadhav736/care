@@ -5,7 +5,7 @@ from rest_framework.exceptions import ValidationError
 from care.emr.fhir.resources.code_concept import CodeConceptResource
 from care.emr.fhir.resources.concept_map import ConceptMapResource
 from care.emr.models.service_request import ServiceRequest
-from care.emr.resources.specimen.spec import SpecimenSpec
+from care.emr.resources.specimen.spec import SpecimenCreateSpec
 
 
 @receiver(post_save, sender=ServiceRequest)
@@ -25,7 +25,9 @@ def create_specimen(sender, instance: ServiceRequest, created: bool, **kwargs):
         .get()
     )
 
-    loinc_specimen_code = code_concept.property.get("system-core", {}).get("code")
+    loinc_specimen_code = (
+        code_concept.get("properties", {}).get("system-core", {}).get("code")
+    )
     concept_map = (
         ConceptMapResource()
         .filter(system="http://loinc.org", code=loinc_specimen_code)
@@ -47,7 +49,7 @@ def create_specimen(sender, instance: ServiceRequest, created: bool, **kwargs):
 
     specimen_coding = specimen_matches[0].concept
 
-    specimen = SpecimenSpec(
+    specimen = SpecimenCreateSpec(
         type={
             "code": specimen_coding.code,
             "display": specimen_coding.display,

@@ -1,8 +1,8 @@
 from django.db import models
 
 from care.emr.models.base import EMRBaseModel
+from care.emr.models.patient import Patient
 from care.emr.models.service_request import ServiceRequest
-from care.facility.models.patient import PatientRegistration
 from care.users.models import User
 
 
@@ -15,7 +15,7 @@ class Specimen(EMRBaseModel):
     type = models.JSONField(default=dict, null=False, blank=False)
 
     subject = models.ForeignKey(
-        PatientRegistration,
+        Patient,
         on_delete=models.CASCADE,
         related_name="specimen",
     )
@@ -54,6 +54,6 @@ class Specimen(EMRBaseModel):
 
     processing = models.JSONField(default=list, null=True, blank=True)
 
-    note = models.JSONField(default=list, null=True, blank=True)
+    note = models.TextField(null=True, blank=True)
 
     parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True)

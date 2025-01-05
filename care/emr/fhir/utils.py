@@ -63,6 +63,23 @@ def parse_fhir_property_part(parts: list[dict[str, Any]]) -> dict[str, Any]:
 
     return {code: value} if code else {}
 
+def parse_fhir_match_part(parameters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Parse FHIR match response into a structured format.
+
+    Args:
+        matches: List of FHIR matches
+
+    Returns:
+        List containing parsed FHIR data
+    """
+    response = {}
+    for parameter in parameters:
+        name = parameter.get("name")
+        if name in ["equivalence", "concept", "source"]:
+            response[name] = parse_value_field(parameter)
+    return response
+
 
 def parse_fhir_parameter_output(parameters: list[dict[str, Any]]) -> dict[str, Any]:
     """
@@ -80,7 +97,15 @@ def parse_fhir_parameter_output(parameters: list[dict[str, Any]]) -> dict[str, A
         name = parameter.get("name")
 
         # Handle basic fields
-        if name in ["code", "display", "system", "version", "name", "inactive"]:
+        if name in [
+            "code",
+            "display",
+            "system",
+            "version",
+            "name",
+            "inactive",
+            "result",
+        ]:
             response["metadata"][name] = parse_value_field(parameter)
 
         # Handle property fields
@@ -108,5 +133,5 @@ def parse_fhir_parameter_output(parameters: list[dict[str, Any]]) -> dict[str, A
         elif name == "match":
             if "match" not in response:
                 response["match"] = []
-            response["match"].append(parse_fhir_parameter_output(parameter["part"]))
+            response["match"].append(parse_fhir_match_part(parameter["part"]))
     return response

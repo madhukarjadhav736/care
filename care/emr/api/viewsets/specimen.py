@@ -5,7 +5,6 @@ from django.db.models import Case, CharField, Q, Value, When
 from django_filters import ChoiceFilter, FilterSet, OrderingFilter, UUIDFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
@@ -15,11 +14,13 @@ from care.emr.fhir.schema.base import DateTime
 from care.emr.models.specimen import Specimen
 from care.emr.resources.specimen.spec import (
     SpecimenCollectRequest,
+    SpecimenCreateSpec,
+    SpecimenListSpec,
     SpecimenProcessRequest,
-    SpecimenReadSpec,
     SpecimenReceiveAtLabRequest,
+    SpecimenRetrieveSpec,
     SpecimenSendToLabRequest,
-    SpecimenSpec,
+    SpecimenUpdateSpec,
     StatusChoices,
 )
 
@@ -86,12 +87,17 @@ class SpecimenFilters(FilterSet):
 
 
 @extend_schema_view(
-    create=extend_schema(request=SpecimenSpec),
+    create=extend_schema(request=SpecimenCreateSpec),
+    update=extend_schema(request=SpecimenUpdateSpec),
+    list=extend_schema(request=SpecimenListSpec),
+    retrieve=extend_schema(request=SpecimenRetrieveSpec),
 )
 class SpecimenViewSet(EMRModelViewSet):
     database_model = Specimen
-    pydantic_model = SpecimenSpec
-    pydantic_read_model = SpecimenReadSpec
+    pydantic_model = SpecimenCreateSpec
+    pydantic_update_model = SpecimenUpdateSpec
+    pydantic_read_model = SpecimenListSpec
+    pydantic_retrieve_model = SpecimenRetrieveSpec
     filter_backends = [DjangoFilterBackend]
     filterset_class = SpecimenFilters
 
@@ -105,7 +111,7 @@ class SpecimenViewSet(EMRModelViewSet):
 
     @extend_schema(
         request=SpecimenCollectRequest,
-        responses={200: SpecimenReadSpec},
+        responses={200: SpecimenRetrieveSpec},
         tags=["specimen"],
     )
     @action(detail=True, methods=["POST"])
@@ -120,14 +126,12 @@ class SpecimenViewSet(EMRModelViewSet):
         specimen.save()
 
         return Response(
-            self.get_read_pydantic_model()
-            .serialize(specimen)
-            .model_dump(exclude=["meta"]),
+            self.get_read_pydantic_model().serialize(specimen).to_json(),
         )
 
     @extend_schema(
         request=SpecimenSendToLabRequest,
-        responses={200: SpecimenReadSpec},
+        responses={200: SpecimenRetrieveSpec},
         tags=["specimen"],
     )
     @action(detail=True, methods=["POST"])
@@ -143,15 +147,12 @@ class SpecimenViewSet(EMRModelViewSet):
         specimen.save()
 
         return Response(
-            self.get_read_pydantic_model()
-            .serialize(specimen)
-            .model_dump(exclude=["meta"]),
-            status=status.HTTP_200_OK,
+            self.get_read_pydantic_model().serialize(specimen).to_json(),
         )
 
     @extend_schema(
         request=SpecimenReceiveAtLabRequest,
-        responses={200: SpecimenReadSpec},
+        responses={200: SpecimenRetrieveSpec},
         tags=["specimen"],
     )
     @action(detail=True, methods=["POST"])
@@ -171,15 +172,12 @@ class SpecimenViewSet(EMRModelViewSet):
         specimen.save()
 
         return Response(
-            self.get_read_pydantic_model()
-            .serialize(specimen)
-            .model_dump(exclude=["meta"]),
-            status=status.HTTP_200_OK,
+            self.get_read_pydantic_model().serialize(specimen).to_json(),
         )
 
     @extend_schema(
         request=SpecimenProcessRequest,
-        responses={200: SpecimenReadSpec},
+        responses={200: SpecimenRetrieveSpec},
         tags=["specimen"],
     )
     @action(detail=True, methods=["POST"])
@@ -201,8 +199,5 @@ class SpecimenViewSet(EMRModelViewSet):
         specimen.save()
 
         return Response(
-            self.get_read_pydantic_model()
-            .serialize(specimen)
-            .model_dump(exclude=["meta"]),
-            status=status.HTTP_200_OK,
+            self.get_read_pydantic_model().serialize(specimen).to_json(),
         )

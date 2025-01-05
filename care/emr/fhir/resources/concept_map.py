@@ -14,17 +14,17 @@ class ConceptMapResource(ResourceManger):
         structured_output = parse_fhir_parameter_output(result)
 
         return ConceptMapResult(
-            result=structured_output["result"],
+            result=structured_output.get("metadata", {}).get("result", False),
             match=[
                 ConceptMapMatch(
-                    equivalence=match["equivalence"],
+                    equivalence=match.get("equivalence"),
                     concept=ConceptMapConcept(
-                        display=match["concept"]["display"],
-                        code=match["concept"]["code"],
+                        display=match.get("concept", {}).get("display"),
+                        code=match.get("concept", {}).get("code"),
                     ),
                     source=match["source"],
                 )
-                for match in structured_output["match"]
+                for match in structured_output.get("match", [])
             ],
         )
 

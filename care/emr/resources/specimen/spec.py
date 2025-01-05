@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from enum import Enum
 
@@ -8,20 +10,14 @@ from care.emr.models.service_request import ServiceRequest
 from care.emr.models.specimen import Specimen
 from care.emr.registries.care_valueset.care_valueset import validate_valueset
 from care.emr.resources.base import EMRResource
-from care.emr.resources.service_request.spec import ServiceRequestReadSpec
+from care.emr.resources.patient.spec import PatientRetrieveSpec
+from care.emr.resources.service_request.spec import ServiceRequestRetrieveSpec
 from care.emr.resources.specimen.valueset import (
     CARE_SPECIMEN_CONDITION_VALUESET,
     CARE_SPECIMEN_PROCESSING_METHOD_VALUESET,
     CARE_SPECIMEN_TYPE_VALUESET,
 )
-from care.facility.api.serializers.patient import PatientDetailSerializer
-from care.users.api.serializers.user import UserBaseMinimumSerializer
-
-
-class BaseSpecimenSpec(EMRResource):
-    __model__ = Specimen
-    __exclude__ = ["subject", "request"]
-    id: UUID4 = None
+from care.emr.resources.user.spec import UserSpec
 
 
 class SpecimenProcessingSpec(EMRResource):
@@ -60,7 +56,12 @@ class StatusChoices(str, Enum):
     entered_in_error = "entered-in-error"
 
 
-class SpecimenSpec(BaseSpecimenSpec):
+class SpecimenSpec(EMRResource):
+    __model__ = Specimen
+    __exclude__ = ["subject", "request"]
+
+    id: UUID4 = None
+
     identifier: str | None = Field(
         default=None,
         description="The unique identifier assigned to the specimen after collection",
@@ -76,17 +77,14 @@ class SpecimenSpec(BaseSpecimenSpec):
     )
 
     type: Coding = Field(
-        ...,
         json_schema_extra={"slug": CARE_SPECIMEN_TYPE_VALUESET.slug},
         description="Indicates the type of specimen being collected",
     )
 
     subject: UUID4 = Field(
-        ...,
         description="The patient from whom the specimen is collected",
     )
     request: UUID4 = Field(
-        ...,
         description="The service request that initiated the collection of the specimen",
     )
 
@@ -128,8 +126,8 @@ class SpecimenSpec(BaseSpecimenSpec):
         description="The processing steps that have been performed on the specimen",
     )
 
-    note: list[Annotation] = Field(
-        default=[],
+    note: str | None = Field(
+        default=None,
         description="Comments made about the service request by the requester, performer, subject, or other participants",
     )
 
@@ -152,57 +150,59 @@ class SpecimenSpec(BaseSpecimenSpec):
             "condition", cls.model_fields["condition"].json_schema_extra["slug"], value
         )
 
+
+class SpecimenCreateSpec(SpecimenSpec):
     def perform_extra_deserialization(self, is_update, obj):
         if not is_update:
             obj.request = ServiceRequest.objects.get(external_id=self.request)
             obj.subject = obj.request.subject
 
 
-class SpecimenReadSpec(BaseSpecimenSpec):
-    __exclude__ = []
+class SpecimenUpdateSpec(SpecimenSpec):
+    class Config:
+        exclude_unset = True
 
-    identifier: str | None
-    accession_identifier: str | None
 
-    status: StatusChoices | None
+class SpecimenListSpec(SpecimenSpec):
+    @classmethod
+    def perform_extra_serialization(cls, mapping, obj):
+        mapping["id"] = obj.external_id
 
-    type: Coding
 
-    subject: dict
-    request: ServiceRequestReadSpec
+class SpecimenRetrieveSpec(SpecimenSpec):
+    request: ServiceRequestRetrieveSpec
+    subject: PatientRetrieveSpec
+    collected_by: UserSpec | None
+    dispatched_by: UserSpec | None
+    received_by: UserSpec | None
+    parent: SpecimenRetrieveSpec | None
 
-    collected_by: dict | None
-    collected_at: datetime | None
-
-    dispatched_by: dict | None
-    dispatched_at: datetime | None
-
-    received_by: dict | None
-    received_at: datetime | None
-
-    condition: Coding | None
-
-    processing: list[SpecimenProcessingSpec]
-
-    note: list[Annotation]
-
-    parent: dict | None
+    created_by: UserSpec | None
+    updated_by: UserSpec | None
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
 
-        mapping["subject"] = PatientDetailSerializer(obj.subject).data
+        if obj.request:
+            mapping["request"] = (
+                ServiceRequestRetrieveSpec().serialize(obj.request).to_json()
+            )
+        if obj.subject:
+            mapping["subject"] = PatientRetrieveSpec.serialize(obj.subject).to_json()
+        if obj.collected_by:
+            mapping["collected_by"] = UserSpec.serialize(obj.collected_by).to_json()
+        if obj.dispatched_by:
+            mapping["dispatched_by"] = UserSpec.serialize(obj.dispatched_by).to_json()
+        if obj.received_by:
+            mapping["received_by"] = UserSpec.serialize(obj.received_by).to_json()
+        if obj.parent:
+            mapping["parent"] = SpecimenRetrieveSpec.serialize(obj.parent).to_json()
 
-        mapping["collected_by"] = UserBaseMinimumSerializer(obj.collected_by).data
-        mapping["dispatched_by"] = UserBaseMinimumSerializer(obj.dispatched_by).data
-        mapping["received_by"] = UserBaseMinimumSerializer(obj.received_by).data
-
-        mapping["parent"] = (
-            SpecimenReadSpec().serialize(obj.parent).model_dump(exclude=["meta"])
-            if obj.parent
-            else None
-        )
+        if obj.created_by:
+            mapping["created_by"] = UserSpec.serialize(obj.created_by).to_json()
+        if obj.updated_by:
+            mapping["updated_by"] = UserSpec.serialize(obj.updated_by).to_json()
 
 
 class SpecimenCollectRequest(BaseModel):
@@ -214,7 +214,6 @@ class SpecimenCollectRequest(BaseModel):
 
 class SpecimenSendToLabRequest(BaseModel):
     lab: UUID4 = Field(
-        ...,
         description="The laboratory to which the specimen is being sent",
     )
 
@@ -247,6 +246,5 @@ class SpecimenReceiveAtLabRequest(BaseModel):
 
 class SpecimenProcessRequest(BaseModel):
     process: list[SpecimenProcessingSpec] = Field(
-        ...,
         description="The processing steps that have been performed on the specimen",
     )

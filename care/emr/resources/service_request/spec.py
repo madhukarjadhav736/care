@@ -1,33 +1,27 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from enum import Enum
 
 from pydantic import UUID4, Field, field_validator
 
-from care.emr.fhir.schema.base import Annotation, Coding, Timing
+from care.emr.fhir.schema.base import Coding, Timing
+from care.emr.models.encounter import Encounter
 from care.emr.models.service_request import ServiceRequest
 from care.emr.registries.care_valueset.care_valueset import validate_valueset
 from care.emr.resources.base import EMRResource
+from care.emr.resources.encounter.spec import EncounterRetrieveSpec
+from care.emr.resources.organization.spec import OrganizationRetrieveSpec
+from care.emr.resources.patient.spec import PatientRetrieveSpec
 from care.emr.resources.service_request.valueset import (
     CARE_LAB_ORDER_CODE_VALUESET,
     CARE_MEDICATION_AS_NEEDED_REASON_VALUESET,
-    CARE_SERVICE_REQUEST_CATEGORY_VALUESET,
 )
-from care.facility.api.serializers.patient import PatientDetailSerializer
-from care.facility.api.serializers.patient_consultation import (
-    PatientConsultationSerializer,
-)
-from care.facility.models.ambulance import User
-from care.facility.models.patient_consultation import PatientConsultation
-from care.users.api.serializers.user import UserBaseMinimumSerializer
+from care.emr.resources.user.spec import UserSpec
+from care.users.models import User
 
 
-class BaseServiceRequestSpec(EMRResource):
-    __model__ = ServiceRequest
-    __exclude__ = ["subject", "encounter", "requester"]
-    id: UUID4 = None
-
-
-class StatusChoices(str, Enum):
+class ServiceRequestStatusChoices(str, Enum):
     draft = "draft"
     active = "active"
     on_hold = "on-hold"
@@ -37,41 +31,52 @@ class StatusChoices(str, Enum):
     unknown = "unknown"
 
 
-class IntentChoices(str, Enum):
+class ServiceRequestIntentChoices(str, Enum):
     proposal = "proposal"
     plan = "plan"
     directive = "directive"
     order = "order"
 
 
-class PriorityChoices(str, Enum):
+class ServiceRequestPriorityChoices(str, Enum):
     routine = "routine"
     urgent = "urgent"
     asap = "asap"
     stat = "stat"
 
 
-class ServiceRequestSpec(BaseServiceRequestSpec):
-    status: StatusChoices = Field(
-        default=StatusChoices.draft,
+class ServiceRequestCategoryChoices(str, Enum):
+    laboratory_procedure = "laboratory_procedure"
+    imaging = "imaging"
+    counselling = "counselling"
+    education = "education"
+    surgical_procedure = "surgical_procedure"
+
+
+class ServiceRequestSpec(EMRResource):
+    __model__ = ServiceRequest
+    __exclude__ = ["subject", "encounter", "requester", "location", "replaces"]
+
+    id: UUID4 | None = None
+
+    status: ServiceRequestStatusChoices = Field(
+        default=ServiceRequestStatusChoices.draft,
         description="Indicates the status of the request, used internally to track the lifecycle of the request",
     )
-    intent: IntentChoices = Field(
-        default=IntentChoices.order,
+    intent: ServiceRequestIntentChoices = Field(
+        default=ServiceRequestIntentChoices.order,
         description="Indicates the level of authority/intentionality associated with the request",
     )
-    priority: PriorityChoices = Field(
-        default=PriorityChoices.routine,
+    priority: ServiceRequestPriorityChoices = Field(
+        default=ServiceRequestPriorityChoices.routine,
         description="Indicates the urgency of the request",
     )
 
-    category: Coding | None = Field(
+    category: ServiceRequestCategoryChoices | None = Field(
         default=None,
-        json_schema_extra={"slug": CARE_SERVICE_REQUEST_CATEGORY_VALUESET.slug},
         description="Identifies the broad category of service that is to be performed",
     )
     code: Coding = Field(
-        ...,
         json_schema_extra={
             "slug": CARE_LAB_ORDER_CODE_VALUESET.slug
         },  # TODO: consider using a broader value set (https://build.fhir.org/valueset-procedure-code.html)
@@ -84,11 +89,9 @@ class ServiceRequestSpec(BaseServiceRequestSpec):
     )
 
     subject: UUID4 = Field(
-        ...,
         description="The patient for whom the service/procedure is being requested",
     )
     encounter: UUID4 = Field(
-        ...,
         description="The encounter within which this service request was created",
     )
 
@@ -115,7 +118,6 @@ class ServiceRequestSpec(BaseServiceRequestSpec):
         description="The date when the request was made",
     )
     requester: UUID4 = Field(
-        ...,
         description="The individual who initiated the request and has responsibility for its activation",
     )
 
@@ -124,12 +126,12 @@ class ServiceRequestSpec(BaseServiceRequestSpec):
         description="The location where the service will be performed",
     )
 
-    note: list[Annotation] = Field(
-        default=[],
+    note: str | None = Field(
+        default=None,
         description="Comments made about the service request by the requester, performer, subject, or other participants",
     )
-    patient_instruction: str = Field(
-        default="",
+    patient_instruction: str | None = Field(
+        default=None,
         description="Instructions for the patient on how the service should be performed",
     )
 
@@ -137,13 +139,6 @@ class ServiceRequestSpec(BaseServiceRequestSpec):
         None,
         description="The request that is being replaced by this request, used in the case of re-orders",
     )
-
-    @field_validator("category")
-    @classmethod
-    def validate_category(cls, value: str):
-        return validate_valueset(
-            "category", cls.model_fields["category"].json_schema_extra["slug"], value
-        )
 
     @field_validator("code")
     @classmethod
@@ -161,57 +156,58 @@ class ServiceRequestSpec(BaseServiceRequestSpec):
             value,
         )
 
+
+class ServiceRequestCreateSpec(ServiceRequestSpec):
     def perform_extra_deserialization(self, is_update, obj):
         if not is_update:
-            obj.encounter = PatientConsultation.objects.get(external_id=self.encounter)
+            obj.encounter = Encounter.objects.get(external_id=self.encounter)
             obj.subject = obj.encounter.patient
             obj.requester = User.objects.get(external_id=self.requester)
 
 
-class ServiceRequestReadSpec(BaseServiceRequestSpec):
-    __exclude__ = []
-    external_id: (
-        UUID4  # TODO: remove this field and do a model dump when accessing any models
-    )
+class ServiceRequestUpdateSpec(ServiceRequestSpec):
+    class Config:
+        exclude_unset = True
 
-    status: str
-    intent: str
-    priority: str
 
-    category: Coding | None
-    code: Coding
+class ServiceRequestListSpec(ServiceRequestSpec):
+    @classmethod
+    def perform_extra_serialization(cls, mapping, obj):
+        mapping["id"] = obj.external_id
 
-    do_not_perform: bool
 
-    subject: dict
-    encounter: dict
+class ServiceRequestRetrieveSpec(ServiceRequestSpec):
+    subject: PatientRetrieveSpec
+    encounter: EncounterRetrieveSpec
+    requester: UserSpec
+    location: OrganizationRetrieveSpec | None
+    replaces: ServiceRequestRetrieveSpec | None
 
-    occurrence_datetime: datetime | None
-    occurrence_timing: Timing | None
-    as_needed: bool
-    as_needed_for: Coding | None
-
-    authored_on: datetime
-    requester: dict
-
-    location: dict | None
-
-    note: list[Annotation]
-    patient_instruction: str
-
-    replaces: dict | None
+    created_by: UserSpec | None
+    updated_by: UserSpec | None
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
 
-        mapping["subject"] = PatientDetailSerializer(obj.subject).data
-        mapping["encounter"] = PatientConsultationSerializer(obj.encounter).data
+        if obj.subject:
+            mapping["subject"] = PatientRetrieveSpec.serialize(obj.subject).to_json()
+        if obj.encounter:
+            mapping["encounter"] = EncounterRetrieveSpec.serialize(
+                obj.encounter
+            ).to_json()
+        if obj.requester:
+            mapping["requester"] = UserSpec.serialize(obj.requester).to_json()
+        if obj.location:
+            mapping["location"] = OrganizationRetrieveSpec.serialize(
+                obj.location
+            ).to_json()
+        if obj.replaces:
+            mapping["replaces"] = ServiceRequestRetrieveSpec.serialize(
+                obj.replaces
+            ).to_json()
 
-        mapping["requester"] = UserBaseMinimumSerializer(obj.requester).data
-
-        mapping["replaces"] = (
-            ServiceRequestReadSpec.serialize(obj.replaces).model_dump(exclude=["meta"])
-            if obj.replaces
-            else None
-        )
+        if obj.created_by:
+            mapping["created_by"] = UserSpec.serialize(obj.created_by).to_json()
+        if obj.updated_by:
+            mapping["updated_by"] = UserSpec.serialize(obj.updated_by).to_json()

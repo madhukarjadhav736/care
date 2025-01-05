@@ -1,11 +1,11 @@
 from django.db import models
 
 from care.emr.models.base import EMRBaseModel
+from care.emr.models.encounter import Encounter
 from care.emr.models.observation import Observation
+from care.emr.models.patient import Patient
 from care.emr.models.service_request import ServiceRequest
 from care.emr.models.specimen import Specimen
-from care.facility.models.patient import PatientRegistration
-from care.facility.models.patient_consultation import PatientConsultation
 from care.users.models import User
 
 
@@ -19,12 +19,12 @@ class DiagnosticReport(EMRBaseModel):
         ServiceRequest, on_delete=models.CASCADE, related_name="diagnostic_report"
     )  # TODO: Make it GenericForeignKey when needed
     subject = models.ForeignKey(
-        PatientRegistration,
+        Patient,
         on_delete=models.CASCADE,
         related_name="diagnostic_report",
     )
     encounter = models.ForeignKey(
-        PatientConsultation,
+        Encounter,
         on_delete=models.CASCADE,
         related_name="diagnostic_report",
     )
@@ -56,5 +56,5 @@ class DiagnosticReport(EMRBaseModel):
 
     media = models.JSONField(default=list, null=True, blank=True)
 
-    note = models.JSONField(default=list, null=True, blank=True)
+    note = models.TextField(null=True, blank=True)
     conclusion = models.TextField(null=True, blank=True)

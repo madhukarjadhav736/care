@@ -5,8 +5,10 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from care.emr.api.viewsets.base import EMRModelViewSet
 from care.emr.models.service_request import ServiceRequest
 from care.emr.resources.service_request.spec import (
-    ServiceRequestReadSpec,
-    ServiceRequestSpec,
+    ServiceRequestCreateSpec,
+    ServiceRequestListSpec,
+    ServiceRequestRetrieveSpec,
+    ServiceRequestUpdateSpec,
 )
 
 
@@ -23,17 +25,22 @@ class ServiceRequestFilters(FilterSet):
 
 
 @extend_schema_view(
-    create=extend_schema(request=ServiceRequestSpec),
+    create=extend_schema(request=ServiceRequestCreateSpec),
+    update=extend_schema(request=ServiceRequestUpdateSpec),
+    list=extend_schema(request=ServiceRequestListSpec),
+    retrieve=extend_schema(request=ServiceRequestRetrieveSpec),
 )
 class ServiceRequestViewSet(EMRModelViewSet):
     database_model = ServiceRequest
-    pydantic_model = ServiceRequestSpec
-    pydantic_read_model = ServiceRequestReadSpec
+    pydantic_model = ServiceRequestCreateSpec
+    pydantic_update_model = ServiceRequestUpdateSpec
+    pydantic_read_model = ServiceRequestListSpec
+    pydantic_retrieve_model = ServiceRequestRetrieveSpec
     filter_backends = [DjangoFilterBackend]
     filterset_class = ServiceRequestFilters
 
     def clean_create_data(self, request, *args, **kwargs):
         clean_data = super().clean_create_data(request, *args, **kwargs)
 
-        clean_data["requester"] = request.user.external_id
+        clean_data["requester"] = self.request.user.external_id
         return clean_data

@@ -3,7 +3,7 @@ from enum import Enum
 
 from pydantic import UUID4, BaseModel, Field, field_validator
 
-from care.emr.fhir.schema.base import Annotation, Coding, Period
+from care.emr.fhir.schema.base import Coding, Period
 from care.emr.models.diagnostic_report import DiagnosticReport
 from care.emr.models.service_request import ServiceRequest
 from care.emr.models.specimen import Specimen
@@ -13,27 +13,13 @@ from care.emr.resources.diagnostic_report.valueset import (
     CARE_DIAGNOSTIC_REPORT_CATEGORY_VALUESET,
     CARE_DIAGNOSTIC_REPORT_CODE_VALUESET,
 )
+from care.emr.resources.encounter.spec import EncounterRetrieveSpec
 from care.emr.resources.observation.spec import ObservationSpec
-from care.emr.resources.service_request.spec import ServiceRequestReadSpec
-from care.emr.resources.specimen.spec import SpecimenReadSpec
-from care.facility.api.serializers.patient import PatientDetailSerializer
-from care.facility.api.serializers.patient_consultation import (
-    PatientConsultationSerializer,
-)
-from care.users.api.serializers.user import UserBaseMinimumSerializer
+from care.emr.resources.patient.spec import PatientRetrieveSpec
+from care.emr.resources.service_request.spec import ServiceRequestRetrieveSpec
+from care.emr.resources.specimen.spec import SpecimenRetrieveSpec
+from care.emr.resources.user.spec import UserSpec
 from care.users.models import User
-
-
-class BaseDiagnosticReportSpec(EMRResource):
-    __model__ = DiagnosticReport
-    __exclude__ = [
-        "subject",
-        "based_on",
-        "encounter",
-        "performer",
-        "results_interpreter",
-    ]
-    id: UUID4 = None
 
 
 class DiagnosticReportMedia(EMRResource):
@@ -42,7 +28,6 @@ class DiagnosticReportMedia(EMRResource):
         description="A description or comment about the media file",
     )
     link: UUID4 = Field(
-        ...,
         description="References the FileUpload object that contains the media file",
     )
 
@@ -61,7 +46,20 @@ class StatusChoices(str, Enum):
     unknown = "unknown"
 
 
-class DiagnosticReportSpec(BaseDiagnosticReportSpec):
+class DiagnosticReportSpec(EMRResource):
+    __model__ = DiagnosticReport
+    __exclude__ = [
+        "subject",
+        "based_on",
+        "encounter",
+        "performer",
+        "results_interpreter",
+        "specimen",
+        "result",
+    ]
+
+    id: UUID4 = None
+
     status: StatusChoices = Field(
         default=StatusChoices.registered,
         description="Indicates the status of the report, used internally to track the lifecycle of the report",
@@ -79,7 +77,6 @@ class DiagnosticReportSpec(BaseDiagnosticReportSpec):
     )
 
     based_on: UUID4 = Field(
-        ...,
         description="The resource that this report is based on, this can be a service request, a medication request, or other resource",
     )
     subject: UUID4 = Field(
@@ -123,8 +120,8 @@ class DiagnosticReportSpec(BaseDiagnosticReportSpec):
         description="Media files associated with the report",
     )
 
-    note: list[Annotation] = Field(
-        default=[],
+    note: str | None = Field(
+        default=None,
         description="Comments made about the service request by the requester, performer, subject, or other participants",
     )
     conclusion: str | None = Field(
@@ -146,6 +143,8 @@ class DiagnosticReportSpec(BaseDiagnosticReportSpec):
             "code", cls.model_fields["code"].json_schema_extra["slug"], value
         )
 
+
+class DiagnosticReportCreateSpec(DiagnosticReportSpec):
     def perform_extra_deserialization(self, is_update, obj):
         if not is_update:
             obj.based_on = ServiceRequest.objects.get(external_id=self.based_on)
@@ -173,55 +172,64 @@ class DiagnosticReportSpec(BaseDiagnosticReportSpec):
                 obj.specimen.set(specimens)
 
 
-class DiagnosticReportReadSpec(BaseDiagnosticReportSpec):
-    __exclude__ = []
+class DiagnosticReportUpdateSpec(DiagnosticReportSpec):
+    class Config:
+        exclude_unset = True
 
-    status: str
 
-    category: Coding | None
-    code: Coding
+class DiagnosticReportListSpec(DiagnosticReportSpec):
+    @classmethod
+    def perform_extra_serialization(cls, mapping, obj):
+        mapping["id"] = obj.external_id
 
-    based_on: ServiceRequestReadSpec
-    subject: dict
-    encounter: dict
 
-    performer: dict | None
-    results_interpreter: dict | None
-
-    issued: datetime | None
-    effective_period: Period | None
-
-    specimen: list[SpecimenReadSpec]
+class DiagnosticReportRetrieveSpec(DiagnosticReportSpec):
+    based_on: ServiceRequestRetrieveSpec
+    subject: PatientRetrieveSpec
+    encounter: EncounterRetrieveSpec
+    performer: UserSpec | None
+    results_interpreter: UserSpec | None
+    specimen: list[SpecimenRetrieveSpec]
     result: list[ObservationSpec]
 
-    media: list[DiagnosticReportMedia]
-
-    note: list[Annotation]
-    conclusion: str | None
+    created_by: UserSpec | None
+    updated_by: UserSpec | None
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
 
-        mapping["subject"] = PatientDetailSerializer(obj.subject).data
-        mapping["encounter"] = PatientConsultationSerializer(obj.encounter).data
-
+        if obj.based_on:
+            mapping["based_on"] = ServiceRequestRetrieveSpec.serialize(
+                obj.based_on
+            ).to_json()
+        if obj.subject:
+            mapping["subject"] = PatientRetrieveSpec.serialize(obj.subject).to_json()
+        if obj.encounter:
+            mapping["encounter"] = EncounterRetrieveSpec.serialize(
+                obj.encounter
+            ).to_json()
         if obj.performer:
-            mapping["performer"] = UserBaseMinimumSerializer(obj.performer).data
-
+            mapping["performer"] = UserSpec.serialize(obj.performer).to_json()
         if obj.results_interpreter:
-            mapping["results_interpreter"] = UserBaseMinimumSerializer(
+            mapping["results_interpreter"] = UserSpec.serialize(
                 obj.results_interpreter
-            ).data
+            ).to_json()
+        if len(obj.specimen):
+            mapping["specimen"] = [
+                SpecimenRetrieveSpec.serialize(specimen).to_json()
+                for specimen in obj.specimen.all()
+            ]
+        if len(obj.result):
+            mapping["result"] = [
+                ObservationSpec.serialize(observation).to_json()
+                for observation in obj.result.all()
+            ]
 
-        mapping["specimen"] = [
-            SpecimenReadSpec.serialize(specimen).model_dump(exclude=["meta"])
-            for specimen in obj.specimen.all()
-        ]
-        mapping["result"] = [
-            ObservationSpec.serialize(observation).model_dump(exclude=["meta"])
-            for observation in obj.result.all()
-        ]
+        if obj.created_by:
+            mapping["created_by"] = UserSpec.serialize(obj.created_by).to_json()
+        if obj.updated_by:
+            mapping["updated_by"] = UserSpec.serialize(obj.updated_by).to_json()
 
 
 class DiagnosticReportObservationRequest(BaseModel):
@@ -233,14 +241,12 @@ class DiagnosticReportObservationRequest(BaseModel):
 
 class DiagnosticReportVerifyRequest(BaseModel):
     is_approved: bool = Field(
-        ...,
         description="Indicates whether the diagnostic report is approved or rejected",
     )
 
 
 class DiagnosticReportReviewRequest(BaseModel):
     is_approved: bool = Field(
-        ...,
         description="Indicates whether the diagnostic report is approved or rejected",
     )
     conclusion: str | None = Field(

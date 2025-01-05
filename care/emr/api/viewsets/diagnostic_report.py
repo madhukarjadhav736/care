@@ -12,10 +12,12 @@ from care.emr.api.viewsets.base import EMRModelViewSet
 from care.emr.models.diagnostic_report import DiagnosticReport
 from care.emr.models.observation import Observation
 from care.emr.resources.diagnostic_report.spec import (
+    DiagnosticReportCreateSpec,
+    DiagnosticReportListSpec,
     DiagnosticReportObservationRequest,
-    DiagnosticReportReadSpec,
+    DiagnosticReportRetrieveSpec,
     DiagnosticReportReviewRequest,
-    DiagnosticReportSpec,
+    DiagnosticReportUpdateSpec,
     DiagnosticReportVerifyRequest,
     StatusChoices,
 )
@@ -57,24 +59,29 @@ class DiagnosticReportFilters(FilterSet):
 
 
 @extend_schema_view(
-    create=extend_schema(request=DiagnosticReportSpec),
+    create=extend_schema(request=DiagnosticReportCreateSpec),
+    update=extend_schema(request=DiagnosticReportUpdateSpec),
+    list=extend_schema(request=DiagnosticReportListSpec),
+    retrieve=extend_schema(request=DiagnosticReportRetrieveSpec),
 )
 class DiagnosticReportViewSet(EMRModelViewSet):
     database_model = DiagnosticReport
-    pydantic_model = DiagnosticReportSpec
-    pydantic_read_model = DiagnosticReportReadSpec
+    pydantic_model = DiagnosticReportCreateSpec
+    pydantic_update_model = DiagnosticReportUpdateSpec
+    pydantic_read_model = DiagnosticReportListSpec
+    pydantic_retrieve_model = DiagnosticReportRetrieveSpec
     filter_backends = [DjangoFilterBackend]
     filterset_class = DiagnosticReportFilters
 
     def clean_create_data(self, request, *args, **kwargs):
         clean_data = super().clean_create_data(request, *args, **kwargs)
 
-        clean_data["performer"] = request.user.external_id
+        clean_data["performer"] = self.request.user.external_id
         return clean_data
 
     @extend_schema(
         request=DiagnosticReportObservationRequest,
-        responses={200: DiagnosticReportReadSpec},
+        responses={200: DiagnosticReportRetrieveSpec},
         tags=["diagnostic_report"],
     )
     @action(detail=True, methods=["POST"])
@@ -103,14 +110,12 @@ class DiagnosticReportViewSet(EMRModelViewSet):
         report.save()
 
         return Response(
-            self.get_read_pydantic_model()
-            .serialize(report)
-            .model_dump(exclude=["meta"]),
+            self.get_read_pydantic_model().serialize(report).to_json(),
         )
 
     @extend_schema(
         request=DiagnosticReportVerifyRequest,
-        responses={200: DiagnosticReportReadSpec},
+        responses={200: DiagnosticReportRetrieveSpec},
         tags=["diagnostic_report"],
     )
     @action(detail=True, methods=["POST"])
@@ -127,14 +132,12 @@ class DiagnosticReportViewSet(EMRModelViewSet):
         report.save()
 
         return Response(
-            self.get_read_pydantic_model()
-            .serialize(report)
-            .model_dump(exclude=["meta"]),
+            self.get_read_pydantic_model().serialize(report).to_json(),
         )
 
     @extend_schema(
         request=DiagnosticReportReviewRequest,
-        responses={200: DiagnosticReportReadSpec},
+        responses={200: DiagnosticReportRetrieveSpec},
         tags=["diagnostic_report"],
     )
     @action(detail=True, methods=["POST"])
@@ -161,7 +164,5 @@ class DiagnosticReportViewSet(EMRModelViewSet):
         report.save()
 
         return Response(
-            self.get_read_pydantic_model()
-            .serialize(report)
-            .model_dump(exclude=["meta"]),
+            self.get_read_pydantic_model().serialize(report).to_json(),
         )
