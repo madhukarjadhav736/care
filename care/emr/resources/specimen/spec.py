@@ -5,7 +5,7 @@ from enum import Enum
 
 from pydantic import UUID4, BaseModel, Field, field_validator
 
-from care.emr.fhir.schema.base import Annotation, Coding
+from care.emr.fhir.schema.base import CodeableConcept, Coding
 from care.emr.models.service_request import ServiceRequest
 from care.emr.models.specimen import Specimen
 from care.emr.registries.care_valueset.care_valueset import validate_valueset
@@ -115,7 +115,7 @@ class SpecimenSpec(EMRResource):
         description="The datetime at which the specimen was received at the laboratory",
     )
 
-    condition: Coding | None = Field(
+    condition: list[CodeableConcept] | None = Field(
         default=None,
         json_schema_extra={"slug": CARE_SPECIMEN_CONDITION_VALUESET.slug},
         description="The condition of the specimen while received at the laboratory",
@@ -145,10 +145,23 @@ class SpecimenSpec(EMRResource):
 
     @field_validator("condition")
     @classmethod
-    def validate_condition(cls, value: str):
-        return validate_valueset(
-            "condition", cls.model_fields["condition"].json_schema_extra["slug"], value
-        )
+    def validate_condition(cls, concepts: list[CodeableConcept]):
+        if not concepts:
+            return concepts
+
+        for concept in concepts:
+            codings = concept.coding
+            if not codings:
+                continue
+
+            for coding in codings:
+                validate_valueset(
+                    "condition",
+                    cls.model_fields["condition"].json_schema_extra["slug"],
+                    coding.code,
+                )
+
+        return concepts
 
 
 class SpecimenCreateSpec(SpecimenSpec):
@@ -224,24 +237,20 @@ class SpecimenReceiveAtLabRequest(BaseModel):
         description="The identifier assigned to the specimen by the laboratory",
     )
 
-    condition: Coding | None = Field(
+    condition: list[CodeableConcept] | None = Field(
         default=None,
         description="The condition of the specimen while received at the laboratory",
     )
 
-    note: Annotation = Field(
+    note: str | None = Field(
         default=None,
         description="Comments made about the specimen while received at the laboratory",
     )
 
     @field_validator("condition")
     @classmethod
-    def validate_condition(cls, value: str):
-        return validate_valueset(
-            "condition",
-            SpecimenSpec.model_fields["condition"].json_schema_extra["slug"],
-            value,
-        )
+    def validate_condition(cls, value: CodeableConcept):
+        return SpecimenSpec.validate_condition(value)
 
 
 class SpecimenProcessRequest(BaseModel):
