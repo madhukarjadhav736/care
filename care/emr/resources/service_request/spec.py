@@ -165,27 +165,28 @@ class ServiceRequestCreateSpec(ServiceRequestSpec):
             obj.requester = User.objects.get(external_id=self.requester)
 
 
-class ServiceRequestUpdateSpec(ServiceRequestSpec):
+class ServiceRequestUpdateSpec(ServiceRequestCreateSpec):
     class Config:
         exclude_unset = True
 
 
 class ServiceRequestListSpec(ServiceRequestSpec):
+    code: Coding = {}
+    subject: PatientRetrieveSpec = {}
+    encounter: EncounterRetrieveSpec = {}
+    requester: UserSpec = {}
+    location: OrganizationRetrieveSpec | None = None
+    replaces: ServiceRequestRetrieveSpec | None = None
+
+    created_by: UserSpec | None = None
+    updated_by: UserSpec | None = None
+
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
 
 
-class ServiceRequestRetrieveSpec(ServiceRequestSpec):
-    subject: PatientRetrieveSpec
-    encounter: EncounterRetrieveSpec
-    requester: UserSpec
-    location: OrganizationRetrieveSpec | None
-    replaces: ServiceRequestRetrieveSpec | None
-
-    created_by: UserSpec | None
-    updated_by: UserSpec | None
-
+class ServiceRequestRetrieveSpec(ServiceRequestListSpec):
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id

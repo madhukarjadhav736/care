@@ -172,29 +172,29 @@ class DiagnosticReportCreateSpec(DiagnosticReportSpec):
                 obj.specimen.set(specimens)
 
 
-class DiagnosticReportUpdateSpec(DiagnosticReportSpec):
+class DiagnosticReportUpdateSpec(DiagnosticReportCreateSpec):
     class Config:
         exclude_unset = True
 
 
 class DiagnosticReportListSpec(DiagnosticReportSpec):
+    based_on: ServiceRequestRetrieveSpec = {}
+    subject: PatientRetrieveSpec = {}
+    encounter: EncounterRetrieveSpec = {}
+    performer: UserSpec | None = None
+    results_interpreter: UserSpec | None = None
+    specimen: list[SpecimenRetrieveSpec] = []
+    result: list[ObservationSpec] = []
+
+    created_by: UserSpec | None = None
+    updated_by: UserSpec | None = None
+
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
 
 
-class DiagnosticReportRetrieveSpec(DiagnosticReportSpec):
-    based_on: ServiceRequestRetrieveSpec
-    subject: PatientRetrieveSpec
-    encounter: EncounterRetrieveSpec
-    performer: UserSpec | None
-    results_interpreter: UserSpec | None
-    specimen: list[SpecimenRetrieveSpec]
-    result: list[ObservationSpec]
-
-    created_by: UserSpec | None
-    updated_by: UserSpec | None
-
+class DiagnosticReportRetrieveSpec(DiagnosticReportListSpec):
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id

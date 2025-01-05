@@ -11,7 +11,10 @@ from care.emr.models.specimen import Specimen
 from care.emr.registries.care_valueset.care_valueset import validate_valueset
 from care.emr.resources.base import EMRResource
 from care.emr.resources.patient.spec import PatientRetrieveSpec
-from care.emr.resources.service_request.spec import ServiceRequestRetrieveSpec
+from care.emr.resources.service_request.spec import (
+    ServiceRequestListSpec,
+    ServiceRequestRetrieveSpec,
+)
 from care.emr.resources.specimen.valueset import (
     CARE_SPECIMEN_CONDITION_VALUESET,
     CARE_SPECIMEN_PROCESSING_METHOD_VALUESET,
@@ -171,28 +174,36 @@ class SpecimenCreateSpec(SpecimenSpec):
             obj.subject = obj.request.subject
 
 
-class SpecimenUpdateSpec(SpecimenSpec):
+class SpecimenUpdateSpec(SpecimenCreateSpec):
     class Config:
         exclude_unset = True
 
 
 class SpecimenListSpec(SpecimenSpec):
+    type: Coding = {}
+    request: ServiceRequestRetrieveSpec = {}
+    subject: PatientRetrieveSpec = {}
+    collected_by: UserSpec | None = None
+    dispatched_by: UserSpec | None = None
+    received_by: UserSpec | None = None
+    parent: SpecimenRetrieveSpec | None = None
+
+    created_by: UserSpec | None = None
+    updated_by: UserSpec | None = None
+
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
 
+        if obj.request:
+            mapping["request"] = (
+                ServiceRequestListSpec().serialize(obj.request).to_json()
+            )
+        if obj.subject:
+            mapping["subject"] = PatientRetrieveSpec.serialize(obj.subject).to_json()
 
-class SpecimenRetrieveSpec(SpecimenSpec):
-    request: ServiceRequestRetrieveSpec
-    subject: PatientRetrieveSpec
-    collected_by: UserSpec | None
-    dispatched_by: UserSpec | None
-    received_by: UserSpec | None
-    parent: SpecimenRetrieveSpec | None
 
-    created_by: UserSpec | None
-    updated_by: UserSpec | None
-
+class SpecimenRetrieveSpec(SpecimenListSpec):
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
