@@ -22,11 +22,7 @@ from care.facility.api.serializers.facility import (
     FacilitySerializer,
     FacilitySpokeSerializer,
 )
-from care.facility.models import (
-    Facility,
-    FacilityCapacity,
-    HospitalDoctors,
-)
+from care.facility.models import Facility, FacilityCapacity, HospitalDoctors
 from care.facility.models.facility import FacilityHubSpoke
 from care.users.models import User
 from care.utils.file_uploads.cover_image import delete_cover_image
@@ -43,7 +39,7 @@ class GeoOrganizationFilter(filters.UUIDFilter):
 
 class FacilityFilter(filters.FilterSet):
     name = filters.CharFilter(field_name="name", lookup_expr="icontains")
-    facility_type = filters.NumberFilter(field_name="facility_type")
+    facility_type = filters.BaseInFilter(field_name="facility_type", lookup_expr="in")
     geo_organization = GeoOrganizationFilter()
 
 
