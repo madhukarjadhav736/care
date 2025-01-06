@@ -1,6 +1,8 @@
 from enum import Enum
 
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from pydantic import UUID4, field_validator
 from rest_framework.generics import get_object_or_404
 
@@ -53,6 +55,17 @@ class UserCreateSpec(UserUpdateSpec):
         if User.objects.filter(username=username).exists():
             raise ValueError("Username already exists")
         return username
+
+    @field_validator("email")
+    @classmethod
+    def validate_user_email(cls, email):
+        if User.objects.filter(email=email).exists():
+            raise ValueError("Email already exists")
+        try:
+            validate_email(email)
+        except ValidationError as e:
+            raise ValueError("Invalid Email") from e
+        return email
 
     @field_validator("password")
     @classmethod

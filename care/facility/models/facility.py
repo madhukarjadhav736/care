@@ -303,6 +303,8 @@ class Facility(FacilityBaseModel, FacilityPermissionMixin):
     )
     middleware_address = models.CharField(null=True, default=None, max_length=200)
 
+    is_public = models.BooleanField(default=False)
+
     class Meta:
         verbose_name_plural = "Facilities"
 

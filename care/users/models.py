@@ -256,7 +256,7 @@ class User(AbstractUser):
     old_user_type = models.IntegerField(
         choices=TYPE_CHOICES, blank=True, null=True, default=None
     )
-    user_type = models.CharField(max_length=100)
+    user_type = models.CharField(max_length=100, null=True, blank=True)
     created_by = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
@@ -293,7 +293,7 @@ class User(AbstractUser):
     old_gender = models.IntegerField(
         choices=GENDER_CHOICES, blank=True, null=True, default=None
     )
-    gender = models.CharField(max_length=100)
+    gender = models.CharField(max_length=100, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
     profile_picture_url = models.CharField(
         blank=True, null=True, default=None, max_length=500

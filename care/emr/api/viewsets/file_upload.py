@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django_filters import rest_framework as filters
 from pydantic import BaseModel
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -50,6 +51,10 @@ def file_authorizer(user, file_type, associating_id, permission):
         raise PermissionDenied("Cannot View File")
 
 
+class FileUploadFilter(filters.FilterSet):
+    is_archived = filters.BooleanFilter(field_name="is_archived")
+
+
 class FileUploadViewSet(
     EMRCreateMixin, EMRRetrieveMixin, EMRUpdateMixin, EMRListMixin, EMRBaseViewSet
 ):
@@ -58,6 +63,8 @@ class FileUploadViewSet(
     pydantic_retrieve_model = FileUploadRetrieveSpec
     pydantic_update_model = FileUploadUpdateSpec
     pydantic_read_model = FileUploadListSpec
+    filterset_class = FileUploadFilter
+    filter_backends = [filters.DjangoFilterBackend]
 
     def authorize_create(self, instance):
         file_authorizer(

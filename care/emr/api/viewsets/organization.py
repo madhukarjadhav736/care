@@ -30,6 +30,7 @@ class OrganizationFilter(filters.FilterSet):
     parent = filters.UUIDFilter(field_name="parent__external_id")
     name = filters.CharFilter(field_name="name", lookup_expr="icontains")
     org_type = filters.CharFilter(field_name="org_type", lookup_expr="iexact")
+    level_cache = filters.NumberFilter(field_name="level_cache")
 
 
 class OrganizationPublicViewSet(EMRModelReadOnlyViewSet):
@@ -41,7 +42,10 @@ class OrganizationPublicViewSet(EMRModelReadOnlyViewSet):
     permission_classes = []
 
     def get_queryset(self):
-        return Organization.objects.filter(org_type="govt")
+        queryset = super().get_queryset().order_by("created_date")
+        if "parent" in self.request.GET and not self.request.GET.get("parent"):
+            queryset = queryset.filter(parent__isnull=True)
+        return queryset
 
 
 class OrganizationViewSet(EMRModelViewSet):
@@ -64,6 +68,15 @@ class OrganizationViewSet(EMRModelViewSet):
             return True
         # Deny all other permissions in OTP mode
         return not getattr(request.user, "is_alternative_login", False)
+
+    def validate_data(self, instance, model_obj=None):
+        """
+        Validating uniqueness on a given level
+        """
+        if Organization.validate_uniqueness(
+            Organization.objects.all(), instance, model_obj
+        ):
+            raise ValidationError("Organization already exists with same name")
 
     def authorize_delete(self, instance):
         if Organization.objects.filter(parent=instance).exists():
@@ -132,7 +145,10 @@ class OrganizationViewSet(EMRModelViewSet):
 
     def get_queryset(self):
         queryset = (
-            super().get_queryset().select_related("parent", "created_by", "updated_by")
+            super()
+            .get_queryset()
+            .select_related("parent", "created_by", "updated_by")
+            .order_by("created_date")
         )
         if "parent" in self.request.GET and not self.request.GET.get("parent"):
             # Filter for root organizations, For some reason its not working as intended in Django Filters

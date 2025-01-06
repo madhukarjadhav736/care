@@ -27,6 +27,7 @@ class FacilityBaseSpec(FacilityBareMinimumSpec):
     phone_number: str
     middleware_address: str | None = None
     facility_type: str
+    is_public: bool = False
 
 
 class FacilityCreateSpec(FacilityBaseSpec):
