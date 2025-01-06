@@ -185,6 +185,15 @@ class ServiceRequestListSpec(ServiceRequestSpec):
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
 
+        if obj.subject:
+            mapping["subject"] = PatientRetrieveSpec.serialize(obj.subject).to_json()
+        if obj.encounter:
+            mapping["encounter"] = EncounterRetrieveSpec.serialize(
+                obj.encounter
+            ).to_json()
+        if obj.requester:
+            mapping["requester"] = UserSpec.serialize(obj.requester).to_json()
+
 
 class ServiceRequestRetrieveSpec(ServiceRequestListSpec):
     @classmethod
