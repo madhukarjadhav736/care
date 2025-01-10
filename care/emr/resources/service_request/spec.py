@@ -200,6 +200,8 @@ class ServiceRequestListSpec(ServiceRequestSpec):
 
     created_by: UserSpec | None = None
     updated_by: UserSpec | None = None
+    created_date: datetime | None = None
+    modified_date: datetime | None = None
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):

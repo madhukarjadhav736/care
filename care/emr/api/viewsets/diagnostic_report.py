@@ -1,10 +1,8 @@
 from datetime import UTC, datetime
 
-from django.db import models
-from django.db.models import Case, CharField, Value, When
-from django_filters import ChoiceFilter, FilterSet, OrderingFilter, UUIDFilter
+from django_filters import CharFilter, FilterSet, OrderingFilter, UUIDFilter
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -24,18 +22,9 @@ from care.emr.resources.diagnostic_report.spec import (
 from care.emr.resources.observation.spec import Performer, PerformerType
 
 
-class PhaseChoices(models.TextChoices):
-    IN_PROCESS = "in_process", "In Process"
-    VERIFICATION_REQUIRED = "verification_required", "Verification Required"
-    REVIEW_REQUIRED = "review_required", "Review Required"
-    REVIEWED = "reviewed", "Reviewed"
-
-
 class DiagnosticReportFilters(FilterSet):
-    phase = ChoiceFilter(choices=PhaseChoices.choices, method="filter_phase")
-    status = ChoiceFilter(
-        choices=[(status.value, status.value) for status in StatusChoices]
-    )
+    phase = CharFilter(field_name="based_on__phase", lookup_expr="iexact")
+    status = CharFilter(field_name="status", lookup_expr="iexact")
     specimen = UUIDFilter(field_name="specimen__external_id")
     based_on = UUIDFilter(field_name="based_on__external_id")
 
@@ -46,24 +35,7 @@ class DiagnosticReportFilters(FilterSet):
         )
     )
 
-    def filter_phase(self, queryset, name, value):
-        return queryset.annotate(
-            phase=Case(
-                When(status=StatusChoices.final, then=Value("reviewed")),
-                When(status=StatusChoices.preliminary, then=Value("review_required")),
-                When(status=StatusChoices.partial, then=Value("verification_required")),
-                default=Value("in_process"),
-                output_field=CharField(),
-            )
-        ).filter(phase=value)
 
-
-@extend_schema_view(
-    create=extend_schema(request=DiagnosticReportCreateSpec),
-    update=extend_schema(request=DiagnosticReportUpdateSpec),
-    list=extend_schema(request=DiagnosticReportListSpec),
-    retrieve=extend_schema(request=DiagnosticReportRetrieveSpec),
-)
 class DiagnosticReportViewSet(EMRModelViewSet):
     database_model = DiagnosticReport
     pydantic_model = DiagnosticReportCreateSpec

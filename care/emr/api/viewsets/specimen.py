@@ -1,10 +1,9 @@
 from datetime import UTC, datetime
 
-from django.db import models
-from django.db.models import Case, CharField, Q, Value, When
-from django_filters import ChoiceFilter, FilterSet, OrderingFilter, UUIDFilter
+from django.db.models import Q
+from django_filters import CharFilter, FilterSet, OrderingFilter, UUIDFilter
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
@@ -24,18 +23,10 @@ from care.emr.resources.specimen.spec import (
 )
 
 
-class PhaseChoices(models.TextChoices):
-    ORDERED = "ordered", "Ordered"
-    COLLECTED = "collected", "Collected"
-    SENT = "sent", "Sent"
-    RECEIVED = "received", "Received"
-    IN_PROCESS = "in_process", "In Process"
-
-
 class SpecimenFilters(FilterSet):
+    phase = CharFilter(field_name="request__phase", lookup_expr="iexact")
     request = UUIDFilter(field_name="request__external_id")
     encounter = UUIDFilter(field_name="request__encounter__external_id")
-    phase = ChoiceFilter(choices=PhaseChoices.choices, method="filter_phase")
 
     ordering = OrderingFilter(
         fields=(
@@ -44,53 +35,7 @@ class SpecimenFilters(FilterSet):
         )
     )
 
-    def filter_phase(self, queryset, name, value):
-        return queryset.annotate(
-            phase=Case(
-                When(
-                    Q(processing__gt=[])
-                    & (
-                        Q(diagnostic_report__isnull=True)
-                        | Q(diagnostic_report__status__in=["registered", "partial"])
-                    ),
-                    then=Value("in_process"),
-                ),
-                When(
-                    diagnostic_report__isnull=True,
-                    received_at__isnull=False,
-                    then=Value("received"),
-                ),
-                When(
-                    diagnostic_report__isnull=True,
-                    received_at__isnull=True,
-                    dispatched_at__isnull=False,
-                    then=Value("sent"),
-                ),
-                When(
-                    diagnostic_report__isnull=True,
-                    received_at__isnull=True,
-                    dispatched_at__isnull=True,
-                    collected_at__isnull=False,
-                    then=Value("collected"),
-                ),
-                When(
-                    diagnostic_report__isnull=True,
-                    received_at__isnull=True,
-                    dispatched_at__isnull=True,
-                    collected_at__isnull=True,
-                    then=Value("ordered"),
-                ),
-                output_field=CharField(),
-            )
-        ).filter(phase=value)
 
-
-@extend_schema_view(
-    create=extend_schema(request=SpecimenCreateSpec),
-    update=extend_schema(request=SpecimenUpdateSpec),
-    list=extend_schema(request=SpecimenListSpec),
-    retrieve=extend_schema(request=SpecimenRetrieveSpec),
-)
 class SpecimenViewSet(EMRModelViewSet):
     database_model = Specimen
     pydantic_model = SpecimenCreateSpec
