@@ -131,14 +131,17 @@ class DiagnosticReportSpec(EMRResource):
 
     @field_validator("category")
     @classmethod
-    def validate_category(cls, value: str):
+    def validate_category(cls, value: Coding | None):
+        if value is None:
+            return None
+
         return validate_valueset(
             "category", cls.model_fields["category"].json_schema_extra["slug"], value
         )
 
     @field_validator("code")
     @classmethod
-    def validate_code(cls, value: str):
+    def validate_code(cls, value: Coding):
         return validate_valueset(
             "code", cls.model_fields["code"].json_schema_extra["slug"], value
         )

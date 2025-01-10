@@ -43,9 +43,8 @@ def create_specimen(sender, instance: ServiceRequest, created: bool, **kwargs):
     specimen_matches.sort(key=lambda x: x.equivalence.priority)
 
     if len(specimen_matches) == 0:
-        return ValidationError(
-            f"No Specimen found for the given Service Request code {instance.code}"
-        )
+        err = f"No Specimen found for the given Service Request code {instance.code}"
+        raise ValidationError(err)
 
     specimen_coding = specimen_matches[0].concept
 

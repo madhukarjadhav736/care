@@ -162,14 +162,17 @@ class ServiceRequestSpec(EMRResource):
 
     @field_validator("code")
     @classmethod
-    def validate_code(cls, value: str):
+    def validate_code(cls, value: Coding):
         return validate_valueset(
             "code", cls.model_fields["code"].json_schema_extra["slug"], value
         )
 
     @field_validator("as_needed_for")
     @classmethod
-    def validate_as_needed_for(cls, value: str):
+    def validate_as_needed_for(cls, value: Coding | None):
+        if value is None:
+            return None
+
         return validate_valueset(
             "as_needed_for",
             cls.model_fields["as_needed_for"].json_schema_extra["slug"],

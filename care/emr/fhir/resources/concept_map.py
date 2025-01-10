@@ -2,11 +2,11 @@ from enum import Enum
 
 from pydantic.main import BaseModel
 
-from care.emr.fhir.resources.base import ResourceManger
+from care.emr.fhir.resources.base import ResourceManager
 from care.emr.fhir.utils import parse_fhir_parameter_output
 
 
-class ConceptMapResource(ResourceManger):
+class ConceptMapResource(ResourceManager):
     allowed_properties = ["system", "code"]
     resource = "ConceptMap"
 

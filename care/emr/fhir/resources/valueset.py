@@ -1,6 +1,6 @@
 from pydantic.main import BaseModel
 
-from care.emr.fhir.resources.base import ResourceManger
+from care.emr.fhir.resources.base import ResourceManager
 from care.emr.fhir.resources.code_concept import MinimalCodeConcept
 from care.emr.fhir.schema.base import Coding
 from care.emr.fhir.schema.valueset.valueset import ValueSetInclude
@@ -13,7 +13,7 @@ class ValueSetFilterValidation(BaseModel):
     count: int = None
 
 
-class ValueSetResource(ResourceManger):
+class ValueSetResource(ResourceManager):
     allowed_properties = ["include", "exclude", "search", "count", "display_language"]
 
     def serialize(self, result):

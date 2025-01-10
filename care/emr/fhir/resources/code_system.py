@@ -3,13 +3,13 @@
 from pydantic.main import BaseModel
 
 from care.emr.fhir.exceptions import MoreThanOneFHIRResourceFoundError
-from care.emr.fhir.resources.base import ResourceManger
+from care.emr.fhir.resources.base import ResourceManager
 from care.facility.models import User
 
 User.objects.filter()
 
 
-class CodeSystemResource(ResourceManger):
+class CodeSystemResource(ResourceManager):
     allowed_properties = ["name", "url"]
     resource = "CodeSystem"
 

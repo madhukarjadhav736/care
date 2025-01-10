@@ -12,7 +12,7 @@ from care.emr.fhir.client import FHIRClient
 default_fhir_client = FHIRClient(server_url=settings.SNOWSTORM_DEPLOYMENT_URL)
 
 
-class ResourceManger:
+class ResourceManager:
     _fhir_client = default_fhir_client
     resource = ""
     allowed_properties = []

@@ -1,10 +1,10 @@
 from pydantic.main import BaseModel
 
-from care.emr.fhir.resources.base import ResourceManger
+from care.emr.fhir.resources.base import ResourceManager
 from care.emr.fhir.utils import parse_fhir_parameter_output
 
 
-class CodeConceptResource(ResourceManger):
+class CodeConceptResource(ResourceManager):
     allowed_properties = ["system", "code", "property"]
     resource = "CodeConcept"
 

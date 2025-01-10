@@ -44,7 +44,10 @@ class SpecimenProcessingSpec(EMRResource):
 
     @field_validator("method")
     @classmethod
-    def validate_method(cls, value: str):
+    def validate_method(cls, value: Coding | None):
+        if value is None:
+            return None
+
         return validate_valueset(
             "method",
             cls.model_fields["method"].json_schema_extra["slug"],
@@ -141,7 +144,7 @@ class SpecimenSpec(EMRResource):
 
     @field_validator("type")
     @classmethod
-    def validate_type(cls, value: str):
+    def validate_type(cls, value: Coding):
         return validate_valueset(
             "type", cls.model_fields["type"].json_schema_extra["slug"], value
         )
