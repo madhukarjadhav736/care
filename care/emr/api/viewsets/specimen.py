@@ -10,7 +10,6 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
 from care.emr.api.viewsets.base import EMRModelViewSet
-from care.emr.fhir.schema.base import DateTime
 from care.emr.models.specimen import Specimen
 from care.emr.resources.specimen.spec import (
     SpecimenCollectRequest,
@@ -159,16 +158,12 @@ class SpecimenViewSet(EMRModelViewSet):
     def receive_at_lab(self, request, *args, **kwargs):
         data = SpecimenReceiveAtLabRequest(**request.data)
         specimen = self.get_object()
-        note = data.note
 
         specimen.accession_identifier = data.accession_identifier
         specimen.condition = data.condition
         specimen.received_at = datetime.now(UTC)
         specimen.received_by = request.user
-        if note:
-            note.authorReference = {"id": request.user.external_id}
-            note.time = DateTime(datetime.now(UTC).isoformat())
-            specimen.note.append(note.model_dump(mode="json"))
+        specimen.note = data.note
         specimen.save()
 
         return Response(
