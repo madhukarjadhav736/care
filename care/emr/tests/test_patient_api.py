@@ -30,7 +30,7 @@ class TestPatientViewSet(CareAPITestBase):
     def generate_patient_data(self, **kwargs):
         if "age" not in kwargs and "date_of_birth" not in kwargs:
             kwargs["age"] = self.fake.random_int(min=1, max=100)
-        return PatientFactory.build(meta={}, **kwargs)
+        return PatientFactory.build(meta={}, gender="male", **kwargs)
 
     def test_create_patient_unauthenticated(self):
         """Test that unauthenticated users cannot create patients"""

@@ -34,7 +34,7 @@ class PatientBaseSpec(EMRResource):
     __exclude__ = ["geo_organization"]
 
     id: UUID4 | None = None
-    name: str
+    name: str = Field(max_length=200)
     gender: GenderChoices
     phone_number: str = Field(max_length=14)
     emergency_phone_number: str | None = Field(None, max_length=14)

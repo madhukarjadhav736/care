@@ -58,6 +58,7 @@ class FacilityReadSpec(FacilityBaseSpec):
 
 class FacilityRetrieveSpec(FacilityReadSpec):
     geo_organization: dict = {}
+    flags: list[str] = []
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
@@ -66,3 +67,4 @@ class FacilityRetrieveSpec(FacilityReadSpec):
             mapping["geo_organization"] = OrganizationReadSpec.serialize(
                 obj.geo_organization
             ).to_json()
+        mapping["flags"] = obj.get_facility_flags()
