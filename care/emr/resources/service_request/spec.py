@@ -53,6 +53,21 @@ class ServiceRequestCategoryChoices(str, Enum):
     surgical_procedure = "surgical_procedure"
 
 
+class ServiceRequestPhaseChoices(str, Enum):
+    order_placed = "order_placed"
+    order_in_progress = "order_in_progress"
+    sample_collected = "sample_collected"
+    sample_sent_to_lab = "sample_sent_to_lab"
+    sample_received_at_lab = "sample_received_at_lab"
+    sample_rejected = "sample_rejected"
+    sample_in_process = "sample_in_process"
+    result_under_verification = "result_under_verification"
+    result_under_review = "result_under_review"
+    result_invalid = "result_invalid"
+    order_completed = "order_completed"
+    order_cancelled = "order_cancelled"
+
+
 class ServiceRequestSpec(EMRResource):
     __model__ = ServiceRequest
     __exclude__ = ["subject", "encounter", "requester", "location", "replaces"]
@@ -138,6 +153,11 @@ class ServiceRequestSpec(EMRResource):
     replaces: UUID4 | None = Field(
         None,
         description="The request that is being replaced by this request, used in the case of re-orders",
+    )
+
+    phase: ServiceRequestPhaseChoices | None = Field(
+        None,
+        description="Indicates the current phase of the lab orders, used internally to track the lifecycle of the order. It is a read-only field and its value is None if the request is not a lab order",
     )
 
     @field_validator("code")
