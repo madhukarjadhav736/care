@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from enum import Enum
 
-from pydantic import UUID4, BaseModel, Field, field_validator
+from pydantic import UUID4, Field, field_validator
 
 from care.emr.fhir.schema.base import CodeableConcept, Coding
 from care.emr.models.service_request import ServiceRequest
@@ -232,44 +232,3 @@ class SpecimenRetrieveSpec(SpecimenListSpec):
             mapping["created_by"] = UserSpec.serialize(obj.created_by).to_json()
         if obj.updated_by:
             mapping["updated_by"] = UserSpec.serialize(obj.updated_by).to_json()
-
-
-class SpecimenCollectRequest(BaseModel):
-    identifier: str | None = Field(
-        default=None,
-        description="The identifier assigned to the specimen while collecting, this can be barcode or any other identifier",
-    )
-
-
-class SpecimenSendToLabRequest(BaseModel):
-    lab: UUID4 = Field(
-        description="The laboratory to which the specimen is being sent",
-    )
-
-
-class SpecimenReceiveAtLabRequest(BaseModel):
-    accession_identifier: str | None = Field(
-        default=None,
-        description="The identifier assigned to the specimen by the laboratory",
-    )
-
-    condition: list[CodeableConcept] | None = Field(
-        default=None,
-        description="The condition of the specimen while received at the laboratory",
-    )
-
-    note: str | None = Field(
-        default=None,
-        description="Comments made about the specimen while received at the laboratory",
-    )
-
-    @field_validator("condition")
-    @classmethod
-    def validate_condition(cls, value: CodeableConcept):
-        return SpecimenSpec.validate_condition(value)
-
-
-class SpecimenProcessRequest(BaseModel):
-    process: list[SpecimenProcessingSpec] = Field(
-        description="The processing steps that have been performed on the specimen",
-    )

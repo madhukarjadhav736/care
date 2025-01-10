@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import UUID4, BaseModel, Field, field_validator
+from pydantic import UUID4, Field, field_validator
 
 from care.emr.fhir.schema.base import Coding, Period
 from care.emr.models.diagnostic_report import DiagnosticReport
@@ -226,26 +226,3 @@ class DiagnosticReportRetrieveSpec(DiagnosticReportListSpec):
             mapping["created_by"] = UserSpec.serialize(obj.created_by).to_json()
         if obj.updated_by:
             mapping["updated_by"] = UserSpec.serialize(obj.updated_by).to_json()
-
-
-class DiagnosticReportObservationRequest(BaseModel):
-    observations: list[ObservationSpec] = Field(
-        default=[],
-        description="List of observations that are part of the diagnostic report",
-    )
-
-
-class DiagnosticReportVerifyRequest(BaseModel):
-    is_approved: bool = Field(
-        description="Indicates whether the diagnostic report is approved or rejected",
-    )
-
-
-class DiagnosticReportReviewRequest(BaseModel):
-    is_approved: bool = Field(
-        description="Indicates whether the diagnostic report is approved or rejected",
-    )
-    conclusion: str | None = Field(
-        default=None,
-        description="Additional notes about the review",
-    )

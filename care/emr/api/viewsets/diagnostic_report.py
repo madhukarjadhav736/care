@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from django_filters import CharFilter, FilterSet, OrderingFilter, UUIDFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
+from pydantic import BaseModel, Field
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -12,14 +13,15 @@ from care.emr.models.observation import Observation
 from care.emr.resources.diagnostic_report.spec import (
     DiagnosticReportCreateSpec,
     DiagnosticReportListSpec,
-    DiagnosticReportObservationRequest,
     DiagnosticReportRetrieveSpec,
-    DiagnosticReportReviewRequest,
     DiagnosticReportUpdateSpec,
-    DiagnosticReportVerifyRequest,
     StatusChoices,
 )
-from care.emr.resources.observation.spec import Performer, PerformerType
+from care.emr.resources.observation.spec import (
+    ObservationSpec,
+    Performer,
+    PerformerType,
+)
 
 
 class DiagnosticReportFilters(FilterSet):
@@ -49,6 +51,12 @@ class DiagnosticReportViewSet(EMRModelViewSet):
         instance.performer = self.request.user
         super().perform_create(instance)
 
+    class DiagnosticReportObservationRequest(BaseModel):
+        observations: list[ObservationSpec] = Field(
+            default=[],
+            description="List of observations that are part of the diagnostic report",
+        )
+
     @extend_schema(
         request=DiagnosticReportObservationRequest,
         responses={200: DiagnosticReportRetrieveSpec},
@@ -56,7 +64,7 @@ class DiagnosticReportViewSet(EMRModelViewSet):
     )
     @action(detail=True, methods=["POST"])
     def observations(self, request, *args, **kwargs):
-        data = DiagnosticReportObservationRequest(**request.data)
+        data = self.DiagnosticReportObservationRequest(**request.data)
         report: DiagnosticReport = self.get_object()
 
         observations = []
@@ -83,6 +91,11 @@ class DiagnosticReportViewSet(EMRModelViewSet):
             self.get_retrieve_pydantic_model().serialize(report).to_json(),
         )
 
+    class DiagnosticReportVerifyRequest(BaseModel):
+        is_approved: bool = Field(
+            description="Indicates whether the diagnostic report is approved or rejected",
+        )
+
     @extend_schema(
         request=DiagnosticReportVerifyRequest,
         responses={200: DiagnosticReportRetrieveSpec},
@@ -90,7 +103,7 @@ class DiagnosticReportViewSet(EMRModelViewSet):
     )
     @action(detail=True, methods=["POST"])
     def verify(self, request, *args, **kwargs):
-        data = DiagnosticReportVerifyRequest(**request.data)
+        data = self.DiagnosticReportVerifyRequest(**request.data)
         report: DiagnosticReport = self.get_object()
 
         if data.is_approved:
@@ -105,6 +118,15 @@ class DiagnosticReportViewSet(EMRModelViewSet):
             self.get_retrieve_pydantic_model().serialize(report).to_json(),
         )
 
+    class DiagnosticReportReviewRequest(BaseModel):
+        is_approved: bool = Field(
+            description="Indicates whether the diagnostic report is approved or rejected",
+        )
+        conclusion: str | None = Field(
+            default=None,
+            description="Additional notes about the review",
+        )
+
     @extend_schema(
         request=DiagnosticReportReviewRequest,
         responses={200: DiagnosticReportRetrieveSpec},
@@ -112,7 +134,7 @@ class DiagnosticReportViewSet(EMRModelViewSet):
     )
     @action(detail=True, methods=["POST"])
     def review(self, request, *args, **kwargs):
-        data = DiagnosticReportReviewRequest(**request.data)
+        data = self.DiagnosticReportReviewRequest(**request.data)
         report: DiagnosticReport = self.get_object()
 
         if (

@@ -4,20 +4,20 @@ from django.db.models import Q
 from django_filters import CharFilter, FilterSet, OrderingFilter, UUIDFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
+from pydantic import UUID4, BaseModel, Field, field_validator
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
 from care.emr.api.viewsets.base import EMRModelViewSet
+from care.emr.fhir.schema.base import CodeableConcept
 from care.emr.models.specimen import Specimen
 from care.emr.resources.specimen.spec import (
-    SpecimenCollectRequest,
     SpecimenCreateSpec,
     SpecimenListSpec,
-    SpecimenProcessRequest,
-    SpecimenReceiveAtLabRequest,
+    SpecimenProcessingSpec,
     SpecimenRetrieveSpec,
-    SpecimenSendToLabRequest,
+    SpecimenSpec,
     SpecimenUpdateSpec,
     StatusChoices,
 )
@@ -53,6 +53,12 @@ class SpecimenViewSet(EMRModelViewSet):
             | Q(accession_identifier=self.kwargs[self.lookup_field]),
         )
 
+    class SpecimenCollectRequest(BaseModel):
+        identifier: str | None = Field(
+            default=None,
+            description="The identifier assigned to the specimen while collecting, this can be barcode or any other identifier",
+        )
+
     @extend_schema(
         request=SpecimenCollectRequest,
         responses={200: SpecimenRetrieveSpec},
@@ -60,7 +66,7 @@ class SpecimenViewSet(EMRModelViewSet):
     )
     @action(detail=True, methods=["POST"])
     def collect(self, request, *args, **kwargs):
-        data = SpecimenCollectRequest(**request.data)
+        data = self.SpecimenCollectRequest(**request.data)
         specimen = self.get_object()
 
         specimen.identifier = data.identifier
@@ -73,6 +79,11 @@ class SpecimenViewSet(EMRModelViewSet):
             self.get_retrieve_pydantic_model().serialize(specimen).to_json(),
         )
 
+    class SpecimenSendToLabRequest(BaseModel):
+        lab: UUID4 = Field(
+            description="The laboratory to which the specimen is being sent",
+        )
+
     @extend_schema(
         request=SpecimenSendToLabRequest,
         responses={200: SpecimenRetrieveSpec},
@@ -80,7 +91,7 @@ class SpecimenViewSet(EMRModelViewSet):
     )
     @action(detail=True, methods=["POST"])
     def send_to_lab(self, request, *args, **kwargs):
-        data = SpecimenSendToLabRequest(**request.data)
+        data = self.SpecimenSendToLabRequest(**request.data)
         specimen = self.get_object()
         service_request = specimen.request
 
@@ -94,6 +105,27 @@ class SpecimenViewSet(EMRModelViewSet):
             self.get_retrieve_pydantic_model().serialize(specimen).to_json(),
         )
 
+    class SpecimenReceiveAtLabRequest(BaseModel):
+        accession_identifier: str | None = Field(
+            default=None,
+            description="The identifier assigned to the specimen by the laboratory",
+        )
+
+        condition: list[CodeableConcept] | None = Field(
+            default=None,
+            description="The condition of the specimen while received at the laboratory",
+        )
+
+        note: str | None = Field(
+            default=None,
+            description="Comments made about the specimen while received at the laboratory",
+        )
+
+        @field_validator("condition")
+        @classmethod
+        def validate_condition(cls, value: CodeableConcept):
+            return SpecimenSpec.validate_condition(value)
+
     @extend_schema(
         request=SpecimenReceiveAtLabRequest,
         responses={200: SpecimenRetrieveSpec},
@@ -101,7 +133,7 @@ class SpecimenViewSet(EMRModelViewSet):
     )
     @action(detail=True, methods=["POST"])
     def receive_at_lab(self, request, *args, **kwargs):
-        data = SpecimenReceiveAtLabRequest(**request.data)
+        data = self.SpecimenReceiveAtLabRequest(**request.data)
         specimen = self.get_object()
 
         specimen.accession_identifier = data.accession_identifier
@@ -115,6 +147,11 @@ class SpecimenViewSet(EMRModelViewSet):
             self.get_retrieve_pydantic_model().serialize(specimen).to_json(),
         )
 
+    class SpecimenProcessRequest(BaseModel):
+        process: list[SpecimenProcessingSpec] = Field(
+            description="The processing steps that have been performed on the specimen",
+        )
+
     @extend_schema(
         request=SpecimenProcessRequest,
         responses={200: SpecimenRetrieveSpec},
@@ -122,7 +159,7 @@ class SpecimenViewSet(EMRModelViewSet):
     )
     @action(detail=True, methods=["POST"])
     def process(self, request, *args, **kwargs):
-        data = SpecimenProcessRequest(**request.data)
+        data = self.SpecimenProcessRequest(**request.data)
         specimen = self.get_object()
 
         processes = []
