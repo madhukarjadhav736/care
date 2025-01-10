@@ -33,8 +33,6 @@ class ServiceRequestViewSet(EMRModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = ServiceRequestFilters
 
-    def clean_create_data(self, request, *args, **kwargs):
-        clean_data = super().clean_create_data(request, *args, **kwargs)
-
-        clean_data["requester"] = self.request.user.external_id
-        return clean_data
+    def perform_create(self, instance):
+        instance.requester = self.request.user
+        return super().perform_create(instance)

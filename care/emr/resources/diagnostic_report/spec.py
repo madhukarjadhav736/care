@@ -19,7 +19,6 @@ from care.emr.resources.patient.spec import PatientRetrieveSpec
 from care.emr.resources.service_request.spec import ServiceRequestRetrieveSpec
 from care.emr.resources.specimen.spec import SpecimenRetrieveSpec
 from care.emr.resources.user.spec import UserSpec
-from care.users.models import User
 
 
 class DiagnosticReportMedia(EMRResource):
@@ -156,14 +155,6 @@ class DiagnosticReportCreateSpec(DiagnosticReportSpec):
 
             if not obj.code:
                 obj.code = obj.based_on.code
-
-            if self.performer:
-                obj.performer = User.objects.get(external_id=self.performer)
-
-            if self.results_interpreter:
-                obj.results_interpreter = User.objects.get(
-                    external_id=self.results_interpreter
-                )
 
             obj.save()
 

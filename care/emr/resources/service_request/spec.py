@@ -18,7 +18,6 @@ from care.emr.resources.service_request.valueset import (
     CARE_MEDICATION_AS_NEEDED_REASON_VALUESET,
 )
 from care.emr.resources.user.spec import UserSpec
-from care.users.models import User
 
 
 class ServiceRequestStatusChoices(str, Enum):
@@ -132,8 +131,9 @@ class ServiceRequestSpec(EMRResource):
         default=datetime.now(UTC),
         description="The date when the request was made",
     )
-    requester: UUID4 = Field(
-        description="The individual who initiated the request and has responsibility for its activation",
+    requester: UUID4 | None = Field(
+        default=None,
+        description="The individual who initiated the request and has responsibility for its activation. If None, the current user is assumed to be the requester",
     )
 
     location: UUID4 | None = Field(
@@ -185,7 +185,6 @@ class ServiceRequestCreateSpec(ServiceRequestSpec):
         if not is_update:
             obj.encounter = Encounter.objects.get(external_id=self.encounter)
             obj.subject = obj.encounter.patient
-            obj.requester = User.objects.get(external_id=self.requester)
 
 
 class ServiceRequestUpdateSpec(ServiceRequestCreateSpec):

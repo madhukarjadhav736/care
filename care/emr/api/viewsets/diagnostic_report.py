@@ -45,11 +45,9 @@ class DiagnosticReportViewSet(EMRModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = DiagnosticReportFilters
 
-    def clean_create_data(self, request, *args, **kwargs):
-        clean_data = super().clean_create_data(request, *args, **kwargs)
-
-        clean_data["performer"] = self.request.user.external_id
-        return clean_data
+    def perform_create(self, instance):
+        instance.performer = self.request.user
+        super().perform_create(instance)
 
     @extend_schema(
         request=DiagnosticReportObservationRequest,
