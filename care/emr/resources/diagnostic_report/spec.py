@@ -14,7 +14,7 @@ from care.emr.resources.diagnostic_report.valueset import (
     CARE_DIAGNOSTIC_REPORT_CODE_VALUESET,
 )
 from care.emr.resources.encounter.spec import EncounterRetrieveSpec
-from care.emr.resources.observation.spec import ObservationSpec
+from care.emr.resources.observation.spec import ObservationReadSpec, ObservationSpec
 from care.emr.resources.patient.spec import PatientRetrieveSpec
 from care.emr.resources.service_request.spec import ServiceRequestRetrieveSpec
 from care.emr.resources.specimen.spec import SpecimenRetrieveSpec
@@ -222,7 +222,7 @@ class DiagnosticReportRetrieveSpec(DiagnosticReportListSpec):
             ]
         if obj.result.exists():
             mapping["result"] = [
-                ObservationSpec.serialize(observation).to_json()
+                ObservationReadSpec.serialize(observation).to_json()
                 for observation in obj.result.all()
             ]
 
