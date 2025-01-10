@@ -10,6 +10,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
 from care.emr.api.viewsets.base import EMRModelViewSet
+from care.emr.api.viewsets.encounter_authz_base import EncounterBasedAuthorizationBase
 from care.emr.fhir.schema.base import CodeableConcept
 from care.emr.models.specimen import Specimen
 from care.emr.resources.specimen.spec import (
@@ -36,7 +37,7 @@ class SpecimenFilters(FilterSet):
     )
 
 
-class SpecimenViewSet(EMRModelViewSet):
+class SpecimenViewSet(EncounterBasedAuthorizationBase, EMRModelViewSet):
     database_model = Specimen
     pydantic_model = SpecimenCreateSpec
     pydantic_update_model = SpecimenUpdateSpec
@@ -46,6 +47,7 @@ class SpecimenViewSet(EMRModelViewSet):
     filterset_class = SpecimenFilters
 
     def get_object(self) -> Specimen:
+        self.authorize_read_encounter()
         return get_object_or_404(
             self.get_queryset(),
             Q(external_id__iexact=self.kwargs[self.lookup_field])
@@ -68,6 +70,7 @@ class SpecimenViewSet(EMRModelViewSet):
     def collect(self, request, *args, **kwargs):
         data = self.SpecimenCollectRequest(**request.data)
         specimen = self.get_object()
+        self.authorize_update({}, specimen)
 
         specimen.identifier = data.identifier
         specimen.status = StatusChoices.available
@@ -94,6 +97,7 @@ class SpecimenViewSet(EMRModelViewSet):
         data = self.SpecimenSendToLabRequest(**request.data)
         specimen = self.get_object()
         service_request = specimen.request
+        self.authorize_update({}, specimen)
 
         service_request.location = data.lab
         specimen.dispatched_at = datetime.now(UTC)
@@ -135,6 +139,7 @@ class SpecimenViewSet(EMRModelViewSet):
     def receive_at_lab(self, request, *args, **kwargs):
         data = self.SpecimenReceiveAtLabRequest(**request.data)
         specimen = self.get_object()
+        self.authorize_update({}, specimen)
 
         specimen.accession_identifier = data.accession_identifier
         specimen.condition = data.condition
@@ -161,6 +166,7 @@ class SpecimenViewSet(EMRModelViewSet):
     def process(self, request, *args, **kwargs):
         data = self.SpecimenProcessRequest(**request.data)
         specimen = self.get_object()
+        self.authorize_update({}, specimen)
 
         processes = []
         for process in data.process:

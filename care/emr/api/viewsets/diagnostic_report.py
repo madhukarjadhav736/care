@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from care.emr.api.viewsets.base import EMRModelViewSet
+from care.emr.api.viewsets.encounter_authz_base import EncounterBasedAuthorizationBase
 from care.emr.models.diagnostic_report import DiagnosticReport
 from care.emr.models.observation import Observation
 from care.emr.resources.diagnostic_report.spec import (
@@ -38,7 +39,7 @@ class DiagnosticReportFilters(FilterSet):
     )
 
 
-class DiagnosticReportViewSet(EMRModelViewSet):
+class DiagnosticReportViewSet(EncounterBasedAuthorizationBase, EMRModelViewSet):
     database_model = DiagnosticReport
     pydantic_model = DiagnosticReportCreateSpec
     pydantic_update_model = DiagnosticReportUpdateSpec
@@ -66,6 +67,7 @@ class DiagnosticReportViewSet(EMRModelViewSet):
     def observations(self, request, *args, **kwargs):
         data = self.DiagnosticReportObservationRequest(**request.data)
         report: DiagnosticReport = self.get_object()
+        self.authorize_update({}, report)
 
         observations = []
         for observation in data.observations:
@@ -105,6 +107,7 @@ class DiagnosticReportViewSet(EMRModelViewSet):
     def verify(self, request, *args, **kwargs):
         data = self.DiagnosticReportVerifyRequest(**request.data)
         report: DiagnosticReport = self.get_object()
+        self.authorize_update({}, report)
 
         if data.is_approved:
             report.status = StatusChoices.preliminary
@@ -136,6 +139,7 @@ class DiagnosticReportViewSet(EMRModelViewSet):
     def review(self, request, *args, **kwargs):
         data = self.DiagnosticReportReviewRequest(**request.data)
         report: DiagnosticReport = self.get_object()
+        self.authorize_update({}, report)
 
         if (
             report.results_interpreter
