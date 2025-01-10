@@ -215,12 +215,12 @@ class DiagnosticReportRetrieveSpec(DiagnosticReportListSpec):
             mapping["results_interpreter"] = UserSpec.serialize(
                 obj.results_interpreter
             ).to_json()
-        if len(obj.specimen):
+        if obj.specimen.exists():
             mapping["specimen"] = [
                 SpecimenRetrieveSpec.serialize(specimen).to_json()
                 for specimen in obj.specimen.all()
             ]
-        if len(obj.result):
+        if obj.result.exists():
             mapping["result"] = [
                 ObservationSpec.serialize(observation).to_json()
                 for observation in obj.result.all()
