@@ -208,10 +208,10 @@ class ServiceRequestRetrieveSpec(ServiceRequestListSpec):
             ).to_json()
         if obj.requester:
             mapping["requester"] = UserSpec.serialize(obj.requester).to_json()
-        if obj.location:
-            mapping["location"] = OrganizationRetrieveSpec.serialize(
-                obj.location
-            ).to_json()
+        # if obj.location:
+        #     mapping["location"] = OrganizationRetrieveSpec.serialize(
+        #         obj.location
+        #     ).to_json()
         if obj.replaces:
             mapping["replaces"] = ServiceRequestRetrieveSpec.serialize(
                 obj.replaces

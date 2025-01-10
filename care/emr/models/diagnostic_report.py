@@ -58,3 +58,8 @@ class DiagnosticReport(EMRBaseModel):
 
     note = models.TextField(null=True, blank=True)
     conclusion = models.TextField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.based_on:
+            self.based_on.save()

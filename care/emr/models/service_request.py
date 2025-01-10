@@ -1,3 +1,4 @@
+from django.apps import apps
 from django.db import models
 
 from care.emr.models.base import EMRBaseModel
@@ -46,3 +47,60 @@ class ServiceRequest(EMRBaseModel):
     replaces = models.ForeignKey(
         "self", on_delete=models.CASCADE, null=True, blank=True
     )
+
+    phase = models.CharField(max_length=100, null=True, blank=True)
+
+    def calculate_phase(self):  # noqa: PLR0911 PLR0912
+        DiagnosticReport = apps.get_model("emr", "DiagnosticReport")
+        Specimen = apps.get_model("emr", "Specimen")
+
+        if not (self.category == "laboratory_procedure" and self.intent == "order"):
+            return None
+
+        if self.status == "revoked":
+            return "order_cancelled"
+
+        if DiagnosticReport.objects.filter(based_on=self.pk, status="final").exists():
+            return "order_completed"
+
+        if DiagnosticReport.objects.filter(based_on=self.pk, status="invalid").exists():
+            return "result_invalid"
+
+        if DiagnosticReport.objects.filter(
+            based_on=self.pk, status="preliminary", issued__isnull=False
+        ).exists():
+            return "result_under_review"
+
+        if DiagnosticReport.objects.filter(based_on=self.pk, status="partial").exists():
+            return "result_under_verification"
+
+        if Specimen.objects.filter(request=self.pk, processing__gt=[]).exists():
+            return "sample_in_process"
+
+        if Specimen.objects.filter(request=self.pk, status="unsatisfactory").exists():
+            return "sample_rejected"
+
+        if Specimen.objects.filter(request=self.pk, received_at__isnull=False).exists():
+            return "sample_received_at_lab"
+
+        if Specimen.objects.filter(
+            request=self.pk, dispatched_at__isnull=False
+        ).exists():
+            return "sample_sent_to_lab"
+
+        if Specimen.objects.filter(
+            request=self.pk, collected_at__isnull=False
+        ).exists():
+            return "sample_collected"
+
+        if self.status == "active":
+            return "order_in_progress"
+
+        if self.status == "draft":
+            return "order_placed"
+
+        return None
+
+    def save(self, *args, **kwargs):
+        self.phase = self.calculate_phase()
+        super().save(*args, **kwargs)

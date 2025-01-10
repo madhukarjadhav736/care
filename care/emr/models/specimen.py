@@ -1,3 +1,4 @@
+
 from django.db import models
 
 from care.emr.models.base import EMRBaseModel
@@ -57,3 +58,8 @@ class Specimen(EMRBaseModel):
     note = models.TextField(null=True, blank=True)
 
     parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.request:
+            self.request.save()
