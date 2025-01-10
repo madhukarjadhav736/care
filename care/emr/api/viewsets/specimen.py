@@ -125,7 +125,7 @@ class SpecimenViewSet(EMRModelViewSet):
         specimen.save()
 
         return Response(
-            self.get_read_pydantic_model().serialize(specimen).to_json(),
+            self.get_retrieve_pydantic_model().serialize(specimen).to_json(),
         )
 
     @extend_schema(
@@ -146,7 +146,7 @@ class SpecimenViewSet(EMRModelViewSet):
         specimen.save()
 
         return Response(
-            self.get_read_pydantic_model().serialize(specimen).to_json(),
+            self.get_retrieve_pydantic_model().serialize(specimen).to_json(),
         )
 
     @extend_schema(
@@ -167,7 +167,7 @@ class SpecimenViewSet(EMRModelViewSet):
         specimen.save()
 
         return Response(
-            self.get_read_pydantic_model().serialize(specimen).to_json(),
+            self.get_retrieve_pydantic_model().serialize(specimen).to_json(),
         )
 
     @extend_schema(
@@ -194,5 +194,5 @@ class SpecimenViewSet(EMRModelViewSet):
         specimen.save()
 
         return Response(
-            self.get_read_pydantic_model().serialize(specimen).to_json(),
+            self.get_retrieve_pydantic_model().serialize(specimen).to_json(),
         )

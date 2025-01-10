@@ -110,7 +110,7 @@ class DiagnosticReportViewSet(EMRModelViewSet):
         report.save()
 
         return Response(
-            self.get_read_pydantic_model().serialize(report).to_json(),
+            self.get_retrieve_pydantic_model().serialize(report).to_json(),
         )
 
     @extend_schema(
@@ -132,7 +132,7 @@ class DiagnosticReportViewSet(EMRModelViewSet):
         report.save()
 
         return Response(
-            self.get_read_pydantic_model().serialize(report).to_json(),
+            self.get_retrieve_pydantic_model().serialize(report).to_json(),
         )
 
     @extend_schema(
@@ -164,5 +164,5 @@ class DiagnosticReportViewSet(EMRModelViewSet):
         report.save()
 
         return Response(
-            self.get_read_pydantic_model().serialize(report).to_json(),
+            self.get_retrieve_pydantic_model().serialize(report).to_json(),
         )
