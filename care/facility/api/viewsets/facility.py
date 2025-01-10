@@ -40,7 +40,7 @@ class GeoOrganizationFilter(filters.UUIDFilter):
 class FacilityFilter(filters.FilterSet):
     name = filters.CharFilter(field_name="name", lookup_expr="icontains")
     facility_type = filters.BaseInFilter(field_name="facility_type", lookup_expr="in")
-    geo_organization = GeoOrganizationFilter()
+    organization = GeoOrganizationFilter()
 
 
 class FacilityViewSet(
