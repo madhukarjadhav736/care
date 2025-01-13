@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
         <title>Pluggable Apps - Care documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
     
@@ -210,6 +210,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../others/configuration.html">Other Details</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../glossary/configuration.html">Glossary</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../middleware/configuration.html">Connecting with Middleware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../databases/backup.html">Docker database backup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../databases/backup.html#restoration-of-the-database">Restoration of the Database</a></li>
 </ul>
 
 </div>
@@ -259,8 +261,8 @@ These plugins can be automatically loaded during docker image build or run time,
 The default care image does not include any plugins, but you can create your own plugin config by overriding the <code class="docutils literal notranslate"><span class="pre">plug_config.py</span></code> file.</p>
 <p>example <code class="docutils literal notranslate"><span class="pre">plug_config.py</span></code> file:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span>
-<span class="kn">from</span> <span class="nn">plugs.manager</span> <span class="kn">import</span> <span class="n">PlugManager</span>
-<span class="kn">from</span> <span class="nn">plugs.plug</span> <span class="kn">import</span> <span class="n">Plug</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">plugs.manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">PlugManager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">plugs.plug</span><span class="w"> </span><span class="kn">import</span> <span class="n">Plug</span>
 
 <span class="n">my_plugin</span> <span class="o">=</span> <span class="n">Plug</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">&quot;my_plugin&quot;</span><span class="p">,</span>
