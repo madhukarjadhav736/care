@@ -189,6 +189,13 @@ class DiagnosticReportListSpec(DiagnosticReportSpec):
     def perform_extra_serialization(cls, mapping, obj):
         mapping["id"] = obj.external_id
 
+        if obj.based_on:
+            mapping["based_on"] = ServiceRequestRetrieveSpec.serialize(
+                obj.based_on
+            ).to_json()
+        if obj.subject:
+            mapping["subject"] = PatientRetrieveSpec.serialize(obj.subject).to_json()
+
 
 class DiagnosticReportRetrieveSpec(DiagnosticReportListSpec):
     @classmethod
