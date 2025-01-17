@@ -80,7 +80,7 @@ class QuestionnaireViewSet(EMRModelViewSet):
     def permissions_controller(self, request):
         if self.action in ["list", "retrieve", "get_organizations"]:
             return AuthorizationController.call("can_read_questionnaire", request.user)
-        if self.action in ["create", "update", "set_organizations", "set_tags"]:
+        if self.action in ["create", "set_organizations", "set_tags"]:
             return AuthorizationController.call("can_write_questionnaire", request.user)
 
         return request.user.is_authenticated
