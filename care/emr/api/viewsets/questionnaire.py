@@ -147,14 +147,10 @@ class QuestionnaireViewSet(EMRModelViewSet):
                 raise PermissionDenied(
                     "Permission Denied to submit patient questionnaire"
                 )
-        else:
-            patient = get_object_or_404(Patient, external_id=request_params.patient)
-            if not AuthorizationController.call(
-                "can_submit_questionnaire_patient_obj", request.user, patient
-            ):
-                raise PermissionDenied(
-                    "Permission Denied to submit patient questionnaire"
-                )
+        elif not AuthorizationController.call(
+            "can_submit_questionnaire_patient_obj", request.user, patient
+        ):
+            raise PermissionDenied("Permission Denied to submit patient questionnaire")
         with transaction.atomic():
             response = handle_response(questionnaire, request_params, request.user)
         return Response(QuestionnaireResponseReadSpec.serialize(response).to_json())
