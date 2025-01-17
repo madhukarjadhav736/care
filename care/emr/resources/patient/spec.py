@@ -32,6 +32,7 @@ class GenderChoices(str, Enum):
 class PatientBaseSpec(EMRResource):
     __model__ = Patient
     __exclude__ = ["geo_organization"]
+    __store_metadata__ = True
 
     id: UUID4 | None = None
     name: str = Field(max_length=200)
@@ -67,10 +68,10 @@ class PatientCreateSpec(PatientBaseSpec):
         return geo_organization
 
     def perform_extra_deserialization(self, is_update, obj):
+        obj.geo_organization = Organization.objects.get(
+            external_id=self.geo_organization
+        )
         if not is_update:
-            obj.geo_organization = Organization.objects.get(
-                external_id=self.geo_organization
-            )
             if self.age:
                 obj.year_of_birth = timezone.now().date().year - self.age
             else:
