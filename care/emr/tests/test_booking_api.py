@@ -584,6 +584,10 @@ class TestSlotViewSet(CareAPITestBase):
 
     def test_get_slots_for_day(self):
         """Users can get available slots for a specific day."""
+
+        # we don't want the slot that was created in setUp;
+        self.slot.delete()
+
         data = {
             "user": self.user.external_id,
             "day": datetime.now(UTC).strftime("%Y-%m-%d"),
@@ -598,6 +602,10 @@ class TestSlotViewSet(CareAPITestBase):
 
     def test_hit_on_get_slots_for_day_does_not_cause_duplicate_slots(self):
         """Multiple requests to get slots for a day should not create duplicate slots."""
+
+        # we don't want the slot that was created in setUp;
+        self.slot.delete()
+
         data = {
             "user": self.user.external_id,
             "day": datetime.now(UTC).strftime("%Y-%m-%d"),
