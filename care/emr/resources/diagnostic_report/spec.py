@@ -195,6 +195,11 @@ class DiagnosticReportListSpec(DiagnosticReportSpec):
             ).to_json()
         if obj.subject:
             mapping["subject"] = PatientRetrieveSpec.serialize(obj.subject).to_json()
+        if obj.specimen.exists():
+            mapping["specimen"] = [
+                SpecimenRetrieveSpec.serialize(specimen).to_json()
+                for specimen in obj.specimen.all()
+            ]
 
 
 class DiagnosticReportRetrieveSpec(DiagnosticReportListSpec):
