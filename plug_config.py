@@ -1,4 +1,4 @@
-from plugs.manager import PlugManager
+from plugs.manager import PlugManager, Plug
 
 plugs = []
 
