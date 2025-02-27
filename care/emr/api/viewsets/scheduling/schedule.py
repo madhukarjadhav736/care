@@ -15,6 +15,7 @@ from care.emr.models.organization import FacilityOrganizationUser
 from care.emr.models.scheduling.booking import TokenSlot
 from care.emr.models.scheduling.schedule import Availability, Schedule
 from care.emr.resources.scheduling.schedule.spec import (
+    AvailabilityCreateSpec,
     AvailabilityForScheduleSpec,
     ScheduleCreateSpec,
     ScheduleReadSpec,
@@ -60,9 +61,10 @@ class ScheduleViewSet(EMRModelViewSet):
         with Lock(f"booking:resource:{instance.resource.id}"), transaction.atomic():
             # Check if there are any tokens allocated for this schedule in the future
             availabilities = instance.availability_set.all()
+            availability_ids = list(availabilities.values_list("id"))
             has_future_bookings = TokenSlot.objects.filter(
                 resource=instance.resource,
-                availability_id__in=availabilities.values_list("id", flat=True),
+                availability_id__in=availability_ids,
                 start_datetime__gt=timezone.now(),
                 allocated__gt=0,
             ).exists()
@@ -71,10 +73,10 @@ class ScheduleViewSet(EMRModelViewSet):
                     "Cannot delete schedule as there are future bookings associated with it"
                 )
             availabilities.update(deleted=True)
-            TokenSlot.objects.filter(
-                resource=instance.resource,
-                availability_id__in=availabilities.values_list("id", flat=True),
-            ).update(deleted=True)
+            slots = TokenSlot.objects.filter(
+                resource=instance.resource, availability_id__in=availability_ids
+            )
+            slots.update(deleted=True)
             super().perform_destroy(instance)
 
     def validate_data(self, instance, model_obj=None):
@@ -131,7 +133,8 @@ class ScheduleViewSet(EMRModelViewSet):
 
 class AvailabilityViewSet(EMRCreateMixin, EMRDestroyMixin, EMRBaseViewSet):
     database_model = Availability
-    pydantic_model = AvailabilityForScheduleSpec
+    pydantic_model = AvailabilityCreateSpec
+    pydantic_retrieve_model = AvailabilityForScheduleSpec
 
     def get_facility_obj(self):
         return get_object_or_404(
@@ -163,6 +166,10 @@ class AvailabilityViewSet(EMRCreateMixin, EMRDestroyMixin, EMRBaseViewSet):
             .order_by("-modified_date")
         )
 
+    def clean_create_data(self, request_data):
+        request_data["schedule"] = self.kwargs["schedule_external_id"]
+        return request_data
+
     def perform_create(self, instance):
         schedule = self.get_schedule_obj()
         instance.schedule = schedule
@@ -179,6 +186,7 @@ class AvailabilityViewSet(EMRCreateMixin, EMRDestroyMixin, EMRBaseViewSet):
                 raise ValidationError(
                     "Cannot delete availability as there are future bookings associated with it"
                 )
+            TokenSlot.objects.filter(availability_id=instance.id).update(deleted=True)
             super().perform_destroy(instance)
 
     def authorize_create(self, instance):

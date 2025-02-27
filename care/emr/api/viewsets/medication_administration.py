@@ -1,6 +1,6 @@
 from django_filters import rest_framework as filters
 
-from care.emr.api.viewsets.base import EMRModelViewSet
+from care.emr.api.viewsets.base import EMRModelViewSet, EMRQuestionnaireResponseMixin
 from care.emr.api.viewsets.encounter_authz_base import EncounterBasedAuthorizationBase
 from care.emr.models.medication_administration import MedicationAdministration
 from care.emr.registries.system_questionnaire.system_questionnaire import (
@@ -9,6 +9,7 @@ from care.emr.registries.system_questionnaire.system_questionnaire import (
 from care.emr.resources.medication.administration.spec import (
     MedicationAdministrationReadSpec,
     MedicationAdministrationSpec,
+    MedicationAdministrationUpdateSpec,
 )
 from care.emr.resources.questionnaire.spec import SubjectType
 
@@ -20,9 +21,12 @@ class MedicationAdministrationFilter(filters.FilterSet):
     occurrence_period_end = filters.DateTimeFromToRangeFilter()
 
 
-class MedicationAdministrationViewSet(EncounterBasedAuthorizationBase, EMRModelViewSet):
+class MedicationAdministrationViewSet(
+    EncounterBasedAuthorizationBase, EMRQuestionnaireResponseMixin, EMRModelViewSet
+):
     database_model = MedicationAdministration
     pydantic_model = MedicationAdministrationSpec
+    pydantic_update_model = MedicationAdministrationUpdateSpec
     pydantic_read_model = MedicationAdministrationReadSpec
     questionnaire_type = "medication_administration"
     questionnaire_title = "Medication Administration"

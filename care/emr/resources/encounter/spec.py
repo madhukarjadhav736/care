@@ -2,11 +2,16 @@
 import datetime
 
 from django.utils import timezone
-from pydantic import UUID4, BaseModel, model_validator
+from pydantic import UUID4, BaseModel
 
-from care.emr.models import Encounter, EncounterOrganization, TokenBooking
+from care.emr.models import (
+    Encounter,
+    EncounterOrganization,
+    FacilityLocationEncounter,
+    TokenBooking,
+)
 from care.emr.models.patient import Patient
-from care.emr.resources.base import EMRResource
+from care.emr.resources.base import EMRResource, PeriodSpec
 from care.emr.resources.encounter.constants import (
     AdmitSourcesChoices,
     ClassChoices,
@@ -17,21 +22,13 @@ from care.emr.resources.encounter.constants import (
 )
 from care.emr.resources.facility.spec import FacilityBareMinimumSpec
 from care.emr.resources.facility_organization.spec import FacilityOrganizationReadSpec
+from care.emr.resources.location.spec import (
+    FacilityLocationEncounterListSpecWithLocation,
+    FacilityLocationListSpec,
+)
 from care.emr.resources.patient.spec import PatientListSpec
 from care.emr.resources.scheduling.slot.spec import TokenBookingReadSpec
-from care.emr.resources.user.spec import UserSpec
 from care.facility.models import Facility
-
-
-class PeriodSpec(BaseModel):
-    start: datetime.datetime | None = None
-    end: datetime.datetime | None = None
-
-    @model_validator(mode="after")
-    def validate_period(self):
-        if (self.start and self.end) and (self.start > self.end):
-            raise ValueError("Start Date cannot be greater than End Date")
-        return self
 
 
 class HospitalizationSpec(BaseModel):
@@ -43,7 +40,13 @@ class HospitalizationSpec(BaseModel):
 
 class EncounterSpecBase(EMRResource):
     __model__ = Encounter
-    __exclude__ = ["patient", "organizations", "facility", "appointment"]
+    __exclude__ = [
+        "patient",
+        "organizations",
+        "facility",
+        "appointment",
+        "current_location",
+    ]
 
     id: UUID4 = None
     status: StatusChoices
@@ -110,6 +113,8 @@ class EncounterRetrieveSpec(EncounterListSpec):
     created_by: dict = {}
     updated_by: dict = {}
     organizations: list[dict] = []
+    current_location: dict | None = None
+    location_history: list[dict] = []
 
     @classmethod
     def perform_extra_serialization(cls, mapping, obj):
@@ -123,7 +128,15 @@ class EncounterRetrieveSpec(EncounterListSpec):
             FacilityOrganizationReadSpec.serialize(encounter_org.organization).to_json()
             for encounter_org in organizations
         ]
-        if obj.created_by:
-            mapping["created_by"] = UserSpec.serialize(obj.created_by)
-        if obj.updated_by:
-            mapping["updated_by"] = UserSpec.serialize(obj.updated_by)
+        mapping["current_location"] = None
+        if obj.current_location:
+            mapping["current_location"] = FacilityLocationListSpec.serialize(
+                obj.current_location
+            ).to_json()
+        mapping["location_history"] = [
+            FacilityLocationEncounterListSpecWithLocation.serialize(i)
+            for i in FacilityLocationEncounter.objects.filter(encounter=obj).order_by(
+                "-created_date"
+            )
+        ]
+        cls.serialize_audit_users(mapping, obj)

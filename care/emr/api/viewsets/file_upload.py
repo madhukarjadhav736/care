@@ -1,5 +1,6 @@
 from django.utils import timezone
 from django_filters import rest_framework as filters
+from drf_spectacular.utils import extend_schema
 from pydantic import BaseModel
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -14,6 +15,7 @@ from care.emr.api.viewsets.base import (
     EMRUpdateMixin,
 )
 from care.emr.models import Encounter, FileUpload, Patient
+from care.emr.models.consent import Consent
 from care.emr.resources.file_upload.spec import (
     FileTypeChoices,
     FileUploadCreateSpec,
@@ -36,8 +38,13 @@ def file_authorizer(user, file_type, associating_id, permission):
             allowed = AuthorizationController.call(
                 "can_write_patient_obj", user, patient_obj
             )
-    elif file_type == FileTypeChoices.encounter.value:
-        encounter_obj = get_object_or_404(Encounter, external_id=associating_id)
+    elif file_type in [FileTypeChoices.encounter.value, FileTypeChoices.consent.value]:
+        if file_type == FileTypeChoices.encounter.value:
+            encounter_obj = get_object_or_404(Encounter, external_id=associating_id)
+        else:
+            encounter_obj = get_object_or_404(
+                Consent, external_id=associating_id
+            ).encounter
         if permission == "read":
             allowed = AuthorizationController.call(
                 "can_view_clinical_data", user, encounter_obj.patient
@@ -53,8 +60,16 @@ def file_authorizer(user, file_type, associating_id, permission):
         raise PermissionDenied("Cannot View File")
 
 
+class FileCategoryFilter(filters.CharFilter):
+    def filter(self, qs, value):
+        if value:
+            return qs.filter(file_category__in=value.split(","))
+        return qs
+
+
 class FileUploadFilter(filters.FilterSet):
     is_archived = filters.BooleanFilter(field_name="is_archived")
+    file_category = FileCategoryFilter()
 
 
 class FileUploadViewSet(
@@ -110,6 +125,7 @@ class FileUploadViewSet(
         file_authorizer(self.request.user, obj.file_type, obj.associating_id, "read")
         return super().get_queryset()
 
+    @extend_schema(responses={200: FileUploadListSpec})
     @action(detail=True, methods=["POST"])
     def mark_upload_completed(self, request, *args, **kwargs):
         obj = self.get_object()
@@ -121,6 +137,10 @@ class FileUploadViewSet(
     class ArchiveRequestSpec(BaseModel):
         archive_reason: str
 
+    @extend_schema(
+        request=ArchiveRequestSpec,
+        responses={200: FileUploadListSpec},
+    )
     @action(detail=True, methods=["POST"])
     def archive(self, request, *args, **kwargs):
         obj = self.get_object()

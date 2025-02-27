@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
+from drf_spectacular.utils import extend_schema
 from pydantic import UUID4, BaseModel
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -66,6 +67,7 @@ class QuestionnaireFilter(filters.FilterSet):
     title = filters.CharFilter(field_name="title", lookup_expr="icontains")
     subject_type = filters.CharFilter(field_name="subject_type", lookup_expr="iexact")
     tag_slug = QuestionnaireTagSlugFilter(field_name="tag_slug")
+    status = filters.CharFilter(field_name="status", lookup_expr="iexact")
 
 
 class QuestionnaireViewSet(EMRModelViewSet):
@@ -80,7 +82,7 @@ class QuestionnaireViewSet(EMRModelViewSet):
     def permissions_controller(self, request):
         if self.action in ["list", "retrieve", "get_organizations"]:
             return AuthorizationController.call("can_read_questionnaire", request.user)
-        if self.action in ["create", "update", "set_organizations", "set_tags"]:
+        if self.action in ["create", "set_organizations", "set_tags"]:
             return AuthorizationController.call("can_write_questionnaire", request.user)
 
         return request.user.is_authenticated
@@ -132,6 +134,10 @@ class QuestionnaireViewSet(EMRModelViewSet):
         )
         return queryset.select_related("created_by", "updated_by")
 
+    @extend_schema(
+        request=QuestionnaireSubmitRequest,
+        responses=QuestionnaireResponseReadSpec,
+    )
     @action(detail=True, methods=["POST"])
     def submit(self, request, *args, **kwargs):
         request_params = QuestionnaireSubmitRequest(**request.data)
@@ -147,14 +153,10 @@ class QuestionnaireViewSet(EMRModelViewSet):
                 raise PermissionDenied(
                     "Permission Denied to submit patient questionnaire"
                 )
-        else:
-            patient = get_object_or_404(Patient, external_id=request_params.patient)
-            if not AuthorizationController.call(
-                "can_submit_questionnaire_patient_obj", request.user, patient
-            ):
-                raise PermissionDenied(
-                    "Permission Denied to submit patient questionnaire"
-                )
+        elif not AuthorizationController.call(
+            "can_submit_questionnaire_patient_obj", request.user, patient
+        ):
+            raise PermissionDenied("Permission Denied to submit patient questionnaire")
         with transaction.atomic():
             response = handle_response(questionnaire, request_params, request.user)
         return Response(QuestionnaireResponseReadSpec.serialize(response).to_json())
@@ -182,6 +184,7 @@ class QuestionnaireViewSet(EMRModelViewSet):
     class QuestionnaireTagsSetSchema(BaseModel):
         tags: list[str]
 
+    @extend_schema(request=QuestionnaireTagsSetSchema)
     @action(detail=True, methods=["POST"])
     def set_tags(self, request, *args, **kwargs):
         questionnaire = self.get_object()
@@ -200,6 +203,7 @@ class QuestionnaireViewSet(EMRModelViewSet):
     class QuestionnaireOrganizationUpdateSchema(BaseModel):
         organizations: list[UUID4]
 
+    @extend_schema(request=QuestionnaireOrganizationUpdateSchema)
     @action(detail=True, methods=["POST"])
     def set_organizations(self, request, *args, **kwargs):
         """
